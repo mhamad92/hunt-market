@@ -1,0 +1,7 @@
+{
+  "name": "hunt",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "react-vite"
+}
