@@ -12,11 +12,17 @@ import {
   IonBadge,
   IonToast,
   IonAlert,
+  IonModal
 } from "@ionic/react";
 import { useParams, useHistory } from "react-router-dom";
 import { cartOutline, storefrontOutline, shieldCheckmarkOutline } from "ionicons/icons";
 import useCartCount from "../hooks/useCartCount";
 import AppHeader from "../components/AppHeader";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Zoom } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/zoom";
+import { PRODUCTS } from "../data/products";
 
 type Product = {
   id: string;
@@ -37,6 +43,7 @@ const ProductDetails: React.FC = () => {
   const { productId } = useParams<RouteParams>();
   const history = useHistory();
 
+
   // 18+ session gate (same logic as Home)
   const is18Ok = () => sessionStorage.getItem("hm_18_ok") === "1";
   const isRestricted = (cat: string) => cat === "shotguns" || cat === "ammo";
@@ -44,6 +51,7 @@ const ProductDetails: React.FC = () => {
   const [show18Alert, setShow18Alert] = useState(false);
   const [is18Verified, setIs18Verified] = useState(is18Ok());
   const { count: cartCount } = useCartCount();
+  const [showImageModal, setShowImageModal] = useState(false);
 
   // Gallery state
   const [activeImg, setActiveImg] = useState(0);
@@ -53,70 +61,10 @@ const ProductDetails: React.FC = () => {
   const [size, setSize] = useState<string>("");
   const [toast, setToast] = useState<string>("");
 
-  const products: Product[] = useMemo(
-    () => [
-      {
-        id: "p1",
-        name: "Camo Jacket Pro",
-        price: 45,
-        images: [
-          // Use working URLs (replace with your own later)
-          "https://images.unsplash.com/photo-1602810316633-ecb7d73c6d63?auto=format&fit=crop&w=1600&q=60",
-          "https://images.unsplash.com/photo-1602810316823-3f5f2f6e1d12?auto=format&fit=crop&w=1600&q=60",
-        ],
-        categoryId: "clothing",
-        storeId: "s1",
-        storeName: "Falcon Hunt Store",
-        description:
-          "Lightweight camo jacket built for early mornings. Wind resistant, quiet fabric, and deep pockets for shells and calls.",
-        inStock: true,
-        sizes: ["S", "M", "L", "XL"],
-      },
-      {
-        id: "p2",
-        name: "Hiking Boots X",
-        price: 60,
-        images: [
-          "https://images.unsplash.com/photo-1600180758890-6b94519a8ba6?auto=format&fit=crop&w=1600&q=60",
-          "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=1600&q=60",
-        ],
-        categoryId: "shoes",
-        storeId: "s2",
-        storeName: "Mountain Gear",
-        description:
-          "Rugged boots with strong grip and waterproof lining. Made for rough terrain and long walks.",
-        inStock: true,
-        sizes: ["40", "41", "42", "43", "44", "45"],
-      },
-      {
-        id: "p6",
-        name: "12ga Shells Box",
-        price: 20,
-        images: ["https://images.unsplash.com/photo-1604617677229-96d65e6a85ee?auto=format&fit=crop&w=1600&q=60"],
-        categoryId: "ammo",
-        storeId: "s1",
-        storeName: "Falcon Hunt Store",
-        description:
-          "12 gauge shells box. Reserve through the app, purchase from the store (age verification required).",
-        inStock: true,
-      },
-      {
-        id: "p7",
-        name: "Over/Under Shotgun",
-        price: 900,
-        images: ["https://images.unsplash.com/photo-1609851451256-7f9e3b1a4d74?auto=format&fit=crop&w=1600&q=60"],
-        categoryId: "shotguns",
-        storeId: "s3",
-        storeName: "Beqaa Outdoors",
-        description:
-          "Classic over/under shotgun. View details in-app. Purchase handled directly by the store (age verification required).",
-        inStock: true,
-      },
-    ],
-    []
-  );
-
-  const product = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
+  const product = useMemo(
+  () => PRODUCTS.find((p) => p.id === productId),
+  [productId]
+);
 
   // Reset UI state when product changes
   useEffect(() => {
@@ -169,32 +117,37 @@ const ProductDetails: React.FC = () => {
       return;
     }
 
-    try {
-      const raw = localStorage.getItem("hm_cart");
-      const cart = raw ? JSON.parse(raw) : [];
+   try {
+  const raw = localStorage.getItem("hm_cart");
+  const cart = raw ? JSON.parse(raw) : [];
 
-      const key = `${product.id}::${size || ""}`;
-      const idx = cart.findIndex((x: any) => `${x.productId}::${x.size || ""}` === key);
+  const key = `${product.id}::${size || ""}`;
+  const idx = cart.findIndex((x: any) => `${x.productId}::${x.size || ""}` === key);
 
-      if (idx >= 0) cart[idx].qty = Math.min(99, (cart[idx].qty || 1) + qty);
-      else {
-        cart.push({
-          productId: product.id,
-          name: product.name,
-          price: product.price,
-          qty,
-          size: size || null,
-          storeId: product.storeId,
-        });
-      }
+  if (idx >= 0) {
+    cart[idx].qty = Math.min(99, (cart[idx].qty || 1) + qty);
+  } else {
+    cart.push({
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      qty,
+      size: size || null,
+      image: product.images?.[0] || null,
+      storeId: product.storeId,
+      storeName: product.storeName,
+      type: product.categoryId === "ammo" ? "reserve" : "normal",
+    });
+  }
 
-      localStorage.setItem("hm_cart", JSON.stringify(cart));
-      window.dispatchEvent(new Event("hm_cart_updated"));
-      setToast("Added to cart.");
-    } catch {
-      setToast("Could not add to cart.");
-    }
-  };
+  localStorage.setItem("hm_cart", JSON.stringify(cart));
+  window.dispatchEvent(new Event("hm_cart_updated"));
+  setToast("Added to cart.");
+} catch (err) {
+  console.error("Cart error:", err);
+  setToast("Could not add to cart.");
+}
+}  
 
   const primaryLabel =
     product.categoryId === "shotguns"
@@ -243,7 +196,8 @@ const ProductDetails: React.FC = () => {
         <div className="hm-wrap" style={{ paddingTop: 14, paddingBottom: 22 }}>
           {/* Gallery */}
           <div className="pd-gallery">
-            <div className="pd-heroimg" style={{ backgroundImage: `url(${product.images[activeImg]})` }} />
+           <div className="pd-heroimg" style={{ backgroundImage: `url(${product.images[activeImg]})` }} onClick={() => setShowImageModal(true)} role="button"
+/>
             {product.images.length > 1 && (
               <div className="pd-thumbs">
                 {product.images.map((img, i) => (
@@ -366,6 +320,41 @@ const ProductDetails: React.FC = () => {
             },
           ]}
         />
+
+       <IonModal
+  isOpen={showImageModal}
+  onDidDismiss={() => setShowImageModal(false)}
+  backdropDismiss={true}
+  className="hm-image-modal"
+>
+  <div className="hm-image-modal-content">
+
+    <Swiper
+      modules={[Zoom]}
+      zoom={true}
+      initialSlide={activeImg}
+      spaceBetween={10}
+      slidesPerView={1}
+      className="hm-swiper"
+    >
+      {product.images.map((img, index) => (
+        <SwiperSlide key={index}>
+          <div className="swiper-zoom-container">
+            <img src={img} alt={product.name} />
+          </div>
+        </SwiperSlide>
+      ))}
+    </Swiper>
+
+    <button
+      className="hm-image-close"
+      onClick={() => setShowImageModal(false)}
+    >
+      ✕
+    </button>
+
+  </div>
+</IonModal>
 
         <IonToast isOpen={!!toast} message={toast} duration={1500} onDidDismiss={() => setToast("")} />
       </IonContent>

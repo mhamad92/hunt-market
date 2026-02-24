@@ -16,6 +16,7 @@ import {
 import { cartOutline } from "ionicons/icons";
 import { useHistory } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
+import { PRODUCTS } from "../data/products";
 
 
 type Product = {
@@ -71,151 +72,15 @@ const Home: React.FC = () => {
   };
 
   // Mock data (replace with Firestore later)
-  const products: Product[] = useMemo(
-    () => [
-      {
-        id: "p1",
-        name: "Camo Jacket Pro",
-        price: 45,
-        image:
-          "https://images.unsplash.com/photo-1520975958225-1c2e3f1a8d8a?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "clothing",
-        storeId: "s1",
-        storeName: "Falcon Hunt Store",
-      },
-      {
-        id: "p1b",
-        name: "Thermal Base Layer",
-        price: 22,
-        image:
-          "https://images.unsplash.com/photo-1520975900308-9f7f3da8bd65?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "clothing",
-        storeId: "s1",
-        storeName: "Falcon Hunt Store",
-      },
-      {
-        id: "p2",
-        name: "Hiking Boots X",
-        price: 60,
-        image:
-          "https://images.unsplash.com/photo-1528701800489-20be3c6a2c1e?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "shoes",
-        storeId: "s2",
-        storeName: "Mountain Gear",
-      },
-      {
-        id: "p2b",
-        name: "Trail Boots Storm",
-        price: 74,
-        image:
-          "https://images.unsplash.com/photo-1528701800619-8a8d83515a69?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "shoes",
-        storeId: "s2",
-        storeName: "Mountain Gear",
-      },
-      {
-        id: "p3",
-        name: "Binoculars 10x42",
-        price: 75,
-        image:
-          "https://images.unsplash.com/photo-1516571748831-5d81767b788d?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "optics",
-        storeId: "s1",
-        storeName: "Falcon Hunt Store",
-      },
-      {
-        id: "p3b",
-        name: "Rangefinder Compact",
-        price: 95,
-        image:
-          "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "optics",
-        storeId: "s3",
-        storeName: "Beqaa Outdoors",
-      },
-      {
-        id: "p4",
-        name: "Camping Lantern",
-        price: 18,
-        image:
-          "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "camping",
-        storeId: "s2",
-        storeName: "Mountain Gear",
-      },
-      {
-        id: "p4b",
-        name: "Compact Stove Kit",
-        price: 28,
-        image:
-          "https://images.unsplash.com/photo-1523413651479-597eb2da0ad6?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "camping",
-        storeId: "s2",
-        storeName: "Mountain Gear",
-      },
-      {
-        id: "p5",
-        name: "Duck Call Classic",
-        price: 12,
-        image:
-          "https://images.unsplash.com/photo-1520975767771-4c26a8b9f0d9?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "calls",
-        storeId: "s3",
-        storeName: "Beqaa Outdoors",
-      },
-      {
-        id: "p5b",
-        name: "Quail Call",
-        price: 9,
-        image:
-          "https://images.unsplash.com/photo-1520975903662-2b4b1cd5df2a?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "calls",
-        storeId: "s3",
-        storeName: "Beqaa Outdoors",
-      },
-      {
-        id: "p6",
-        name: "12ga Shells Box",
-        price: 20,
-        image:
-          "https://images.unsplash.com/photo-1604617677229-96d65e6a85ee?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "ammo",
-        storeId: "s1",
-        storeName: "Falcon Hunt Store",
-      },
-      {
-        id: "p6b",
-        name: "20ga Shells Box",
-        price: 19,
-        image:
-          "https://images.unsplash.com/photo-1604617677963-d4ad8e0f2f25?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "ammo",
-        storeId: "s1",
-        storeName: "Falcon Hunt Store",
-      },
-      {
-        id: "p7",
-        name: "Over/Under Shotgun",
-        price: 900,
-        image:
-          "https://images.unsplash.com/photo-1609851451256-7f9e3b1a4d74?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "shotguns",
-        storeId: "s3",
-        storeName: "Beqaa Outdoors",
-      },
-      {
-        id: "p7b",
-        name: "Semi-Auto Shotgun",
-        price: 980,
-        image:
-          "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=1200&q=60",
-        categoryId: "shotguns",
-        storeId: "s3",
-        storeName: "Beqaa Outdoors",
-      },
-    ],
-    []
-  );
+  const products = useMemo(() => PRODUCTS.map(p => ({
+  id: p.id,
+  name: p.name,
+  price: p.price,
+  image: p.images[0],
+  categoryId: p.categoryId,
+  storeId: p.storeId,
+  storeName: p.storeName,
+})), []);
 
   // Stores already in cart (for "same store first")
   const cartStoreIds = useMemo(() => {
@@ -269,7 +134,7 @@ const Home: React.FC = () => {
   return (
     <IonPage>
       
-      <AppHeader showBack backHref="/home" />
+      <AppHeader />
 
       <IonContent fullscreen className="hm-content hm-camo">
         <div className="hm-hero hm-camo">
