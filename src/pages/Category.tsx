@@ -1,41 +1,74 @@
 import React, { useMemo, useState } from "react";
-import {
-  IonPage,
-  IonHeader,
-  IonToolbar,
-  IonTitle,
-  IonContent,
-  IonGrid,
-  IonRow,
-  IonCol,
-  IonCard,
-  IonCardContent,
-  IonModal,
-  IonButton,
-  IonText,
-} from "@ionic/react";
+import { IonContent, IonPage, IonHeader, IonToolbar, IonSearchbar, IonSelect, IonSelectOption, IonAlert } from "@ionic/react";
 import { useHistory, useParams } from "react-router-dom";
+import AppHeader from "../components/AppHeader";
+import { PRODUCTS } from "../data/products";
 
-type Product = {
-  id: string;
-  name: string;
-  price: number;
-  image: string;
-  categoryId: string;
-};
+type RouteParams = { categoryId: string };
 
-const Category: React.FC = () => {
-  const { categoryId } = useParams<{ categoryId: string }>();
+const isRestrictedCategory = (categoryId: string) => categoryId === "ammo" || categoryId === "shotguns";
+const is18Ok = () => sessionStorage.getItem("hm_18_ok") === "1";
+
+const FALLBACK_IMG =
+  "https://images.unsplash.com/photo-1523413651479-597eb2da0ad6?auto=format&fit=crop&w=1200&q=60";
+
+const CategoryPage: React.FC = () => {
   const history = useHistory();
+  const { categoryId } = useParams<RouteParams>();
 
-  const [ageModal, setAgeModal] = useState(() => {
-    const isRestricted = categoryId === "ammo" || categoryId === "shotguns";
-    if (!isRestricted) return false;
-    const allowed = localStorage.getItem(`hm_age_ok_${categoryId}`) === "1";
-    return !allowed;
-  });
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<"featured" | "price_low" | "price_high" | "name">("featured");
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
 
-  const categoryName = useMemo(() => {
+  // 18+ gate
+  const [show18Alert, setShow18Alert] = useState(false);
+  const [pendingProductId, setPendingProductId] = useState<string | null>(null);
+
+  const categoryProducts = useMemo(() => {
+    return PRODUCTS.filter((p) => p.categoryId === categoryId);
+  }, [categoryId]);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    let list = [...categoryProducts];
+
+    if (term) {
+      list = list.filter((p) => `${p.name} ${p.description ?? ""}`.toLowerCase().includes(term));
+    }
+
+    if (onlyAvailable) {
+      list = list.filter((p) => p.inStock !== false);
+    }
+
+    switch (sort) {
+      case "price_low":
+        list.sort((a, b) => a.price - b.price);
+        break;
+      case "price_high":
+        list.sort((a, b) => b.price - a.price);
+        break;
+      case "name":
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      default:
+        break;
+    }
+
+    return list;
+  }, [categoryProducts, q, sort, onlyAvailable]);
+
+  const openProduct = (productId: string) => history.push(`/product/${productId}`);
+
+  const handleProductClick = (productId: string) => {
+    if (isRestrictedCategory(categoryId) && !is18Ok()) {
+      setPendingProductId(productId);
+      setShow18Alert(true);
+      return;
+    }
+    openProduct(productId);
+  };
+
+  const categoryTitle = useMemo(() => {
     const map: Record<string, string> = {
       clothing: "Clothing",
       shoes: "Shoes",
@@ -45,115 +78,135 @@ const Category: React.FC = () => {
       ammo: "Ammunition",
       shotguns: "Shotguns",
     };
-    return map[categoryId] ?? categoryId;
+    return map[categoryId] || categoryId;
   }, [categoryId]);
-
-  const products: Product[] = useMemo(
-    () => [
-      {
-        id: "p1",
-        name: "Camo Jacket Pro",
-        price: 45,
-        image:
-          "https://images.unsplash.com/photo-1520975958225-1c2e3f1a8d8a?auto=format&fit=crop&w=900&q=60",
-        categoryId: "clothing",
-      },
-      {
-        id: "p2",
-        name: "Hiking Boots X",
-        price: 60,
-        image:
-          "https://images.unsplash.com/photo-1528701800489-20be3c6a2c1e?auto=format&fit=crop&w=900&q=60",
-        categoryId: "shoes",
-      },
-      {
-        id: "p3",
-        name: "Binoculars 10x42",
-        price: 75,
-        image:
-          "https://images.unsplash.com/photo-1516571748831-5d81767b788d?auto=format&fit=crop&w=900&q=60",
-        categoryId: "optics",
-      },
-      {
-        id: "p6",
-        name: "12ga Shells Box",
-        price: 20,
-        image:
-          "https://images.unsplash.com/photo-1604617677229-96d65e6a85ee?auto=format&fit=crop&w=900&q=60",
-        categoryId: "ammo",
-      },
-      {
-        id: "p7",
-        name: "Over/Under Shotgun",
-        price: 900,
-        image:
-          "https://images.unsplash.com/photo-1609851451256-7f9e3b1a4d74?auto=format&fit=crop&w=900&q=60",
-        categoryId: "shotguns",
-      },
-    ],
-    []
-  );
-
-  const list = products.filter((p) => p.categoryId === categoryId);
-
-  const allowAge = () => {
-    localStorage.setItem(`hm_age_ok_${categoryId}`, "1");
-    setAgeModal(false);
-  };
-
-  const denyAge = () => {
-    setAgeModal(false);
-    history.replace("/home");
-  };
 
   return (
     <IonPage>
+      <AppHeader showBack backHref="/home" />
+
+      {/* Sticky search + controls */}
       <IonHeader translucent>
-        <IonToolbar>
-          <IonTitle>{categoryName}</IonTitle>
+        <IonToolbar className="hm-toolbar">
+          <div className="hm-wrap" style={{ padding: "8px 18px", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <IonSearchbar
+              className="hm-search"
+              value={q}
+              placeholder={`Search in ${categoryTitle}...`}
+              onIonInput={(e) => setQ(e.detail.value ?? "")}
+            />
+
+            <IonSelect
+              value={sort}
+              interface="popover"
+              className="hm-select-ionic"
+              onIonChange={(e) => setSort(e.detail.value)}
+            >
+              <IonSelectOption value="featured">Sort: Featured</IonSelectOption>
+              <IonSelectOption value="price_low">Sort: Price ↑</IonSelectOption>
+              <IonSelectOption value="price_high">Sort: Price ↓</IonSelectOption>
+              <IonSelectOption value="name">Sort: Name A–Z</IonSelectOption>
+            </IonSelect>
+
+            <button
+              className={`hm-toggle ${onlyAvailable ? "active" : ""}`}
+              onClick={() => setOnlyAvailable((v) => !v)}
+              type="button"
+            >
+              In stock
+            </button>
+          </div>
         </IonToolbar>
       </IonHeader>
 
-      <IonContent fullscreen className="hm-content">
-        <div className="hm-section">
-          <IonGrid fixed>
-            <IonRow>
-              {list.map((p) => (
-                <IonCol size="6" sizeMd="4" sizeLg="3" key={p.id}>
-                  <IonCard className="hm-store-card" button onClick={() => history.push(`/product/${p.id}`)}>
-                    <div className="hm-card-img" style={{ backgroundImage: `url(${p.image})` }} />
-                    <IonCardContent>
-                      <div className="hm-card-name">{p.name}</div>
-                      <div className="hm-card-price">${p.price}</div>
-                    </IonCardContent>
-                  </IonCard>
-                </IonCol>
-              ))}
-            </IonRow>
-          </IonGrid>
+      <IonContent fullscreen className="hm-content hm-camo">
+        <div className="hm-wrap" style={{ paddingTop: 14, paddingBottom: 26 }}>
+          <div className="sd-row" style={{ marginBottom: 6 }}>
+            <div className="sd-title">
+              {categoryTitle} <span className="sd-count">{filtered.length}</span>
+            </div>
+          </div>
+
+          {isRestrictedCategory(categoryId) && (
+            <div className="pd-footnote" style={{ marginTop: 8 }}>
+              Restricted category — 18+ required. Purchases/reservations are handled by the store.
+            </div>
+          )}
+
+          <div className="hm-grid" style={{ marginTop: 14 }}>
+            {filtered.map((p) => (
+              <div
+                key={p.id}
+                className="hm-product hm-product-wide sd-product"
+                role="button"
+                onClick={() => handleProductClick(p.id)}
+              >
+                <div className="hm-product-img">
+                  <img
+                    className="hm-product-img-el"
+                    src={p.images?.[0] || ""}
+                    alt={p.name}
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
+                    }}
+                  />
+                  <div className="hm-product-img-overlay" />
+                </div>
+
+                <div className="hm-product-body">
+                  <p className="hm-product-name">{p.name}</p>
+
+                  <div className="sd-bottom" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div className="hm-product-price">${p.price}</div>
+
+                    {(p.categoryId === "ammo" || p.categoryId === "shotguns") && (
+                      <span className="sd-pill warn">18+</span>
+                    )}
+                  </div>
+
+                  {p.inStock === false && <div className="sd-pill">Out of stock</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {!filtered.length && (
+            <div className="stores-empty" style={{ marginTop: 14 }}>
+              No items match “{q.trim()}”
+            </div>
+          )}
         </div>
 
-        <IonModal isOpen={ageModal} onDidDismiss={denyAge}>
-          <IonContent className="hm-content ion-padding">
-            <div className="hm-auth-card">
-              <IonText>
-                <h2 style={{ marginTop: 0 }}>18+ required</h2>
-              </IonText>
-              <p style={{ opacity: 0.85 }}>
-                This section contains regulated items. Are you above 18?
-              </p>
-              <IonButton expand="block" onClick={allowAge}>
-                Yes, I’m 18+
-              </IonButton>
-              <IonButton expand="block" fill="outline" onClick={denyAge}>
-                No
-              </IonButton>
-            </div>
-          </IonContent>
-        </IonModal>
+        {/* 18+ gate */}
+        <IonAlert
+          isOpen={show18Alert}
+          header="Adults only (18+)"
+          subHeader="Restricted category"
+          message="You must be 18+ to view Shotguns or Ammunition."
+          buttons={[
+            {
+              text: "Cancel",
+              role: "cancel",
+              handler: () => {
+                setShow18Alert(false);
+                setPendingProductId(null);
+              },
+            },
+            {
+              text: "I’m 18+",
+              handler: () => {
+                sessionStorage.setItem("hm_18_ok", "1");
+                setShow18Alert(false);
+                if (pendingProductId) openProduct(pendingProductId);
+                setPendingProductId(null);
+              },
+            },
+          ]}
+        />
       </IonContent>
     </IonPage>
   );
 };
 
-export default Category;
+export default CategoryPage;

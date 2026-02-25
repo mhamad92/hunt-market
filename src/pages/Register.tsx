@@ -1,88 +1,152 @@
 import React, { useState } from "react";
 import {
   IonPage,
-  IonHeader,
-  IonToolbar,
-  IonTitle,
   IonContent,
-  IonInput,
   IonItem,
   IonLabel,
+  IonInput,
   IonButton,
   IonToast,
   IonText,
 } from "@ionic/react";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
+import AppHeader from "../components/AppHeader";
+import { digitsOnly, isValidEmail, registerLocalUser } from "../utils/authLocal";
 
 const Register: React.FC = () => {
   const history = useHistory();
+  const location = useLocation<{ from?: string }>();
+
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(""); // digits only
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [toast, setToast] = useState<string | null>(null);
 
   const onRegister = async () => {
-    // TODO (later): Firebase createUserWithEmailAndPassword + save profile
-    if (!name || !phone || !email || !password) {
+    const fullName = name.trim();
+    const phoneDigits = digitsOnly(phone);
+    const emailTrim = email.trim();
+
+    if (!fullName || !phoneDigits || !emailTrim || !password) {
       setToast("Please fill all fields.");
       return;
     }
-    localStorage.setItem("hm_logged_in", "1");
-    history.replace("/profile");
+    if (!isValidEmail(emailTrim)) {
+      setToast("Please enter a valid email address.");
+      return;
+    }
+    if (phoneDigits.length < 7) {
+      setToast("Please enter a valid phone number.");
+      return;
+    }
+    if (password.length < 6) {
+      setToast("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      registerLocalUser({
+        fullName,
+        phone: phoneDigits,
+        email: emailTrim,
+        password,
+      });
+
+      const backTo = (location.state as any)?.from ?? "/profile";
+      history.replace(backTo);
+    } catch (e: any) {
+      setToast(e?.message || "Could not create account.");
+    }
   };
 
   return (
     <IonPage>
-      <IonHeader translucent>
-        <IonToolbar>
-          <IonTitle>Create account</IonTitle>
-        </IonToolbar>
-      </IonHeader>
+      <AppHeader />
 
-      <IonContent fullscreen className="hm-content ion-padding">
-        <div className="hm-auth-card">
-          <IonText>
-            <h2 style={{ marginTop: 0 }}>Create your account</h2>
-          </IonText>
-
-          <IonItem lines="inset">
-            <IonLabel position="stacked">Name</IonLabel>
-            <IonInput value={name} placeholder="Your name" onIonInput={(e) => setName(e.detail.value ?? "")} />
-          </IonItem>
-
-          <IonItem lines="inset">
-            <IonLabel position="stacked">Phone</IonLabel>
-            <IonInput value={phone} placeholder="+961..." onIonInput={(e) => setPhone(e.detail.value ?? "")} />
-          </IonItem>
-
-          <IonItem lines="inset">
-            <IonLabel position="stacked">Email</IonLabel>
-            <IonInput value={email} type="email" placeholder="you@email.com" onIonInput={(e) => setEmail(e.detail.value ?? "")} />
-          </IonItem>
-
-          <IonItem lines="inset">
-            <IonLabel position="stacked">Password</IonLabel>
-            <IonInput value={password} type="password" placeholder="••••••••" onIonInput={(e) => setPassword(e.detail.value ?? "")} />
-          </IonItem>
-
-          <div style={{ height: 14 }} />
-
-          <IonButton expand="block" onClick={onRegister}>
-            Create account
-          </IonButton>
-
-          <IonButton expand="block" fill="outline" onClick={() => history.push("/login")}>
-            Back to login
-          </IonButton>
+      <IonContent fullscreen className="hm-content hm-camo">
+        <div className="hm-hero hm-camo" style={{ paddingBottom: 18 }}>
+          <div className="hm-wrap hm-hero-inner">
+            <div className="hm-hero-kicker">
+              <span className="hm-dot" /> JOIN
+            </div>
+            <h1 className="hm-hero-title">
+              CREATE. <span>HUNT.</span>
+            </h1>
+            <p className="hm-hero-sub">One account for shopping and booking.</p>
+          </div>
         </div>
 
-        <IonToast
-          isOpen={!!toast}
-          message={toast ?? ""}
-          duration={1600}
-          onDidDismiss={() => setToast(null)}
-        />
+        <div className="hm-wrap">
+          <div className="hm-auth-card">
+            <IonText>
+              <h2 style={{ marginTop: 0, marginBottom: 6, fontWeight: 1100 }}>Create your account</h2>
+              <p style={{ marginTop: 0, opacity: 0.75, fontWeight: 850 }}>
+                Your phone will be used for delivery contact.
+              </p>
+            </IonText>
+
+            <IonItem lines="none" className="hm-field">
+              <IonLabel position="stacked">Name</IonLabel>
+              <IonInput
+                value={name}
+                placeholder="Your name"
+                onIonInput={(e) => setName(e.detail.value ?? "")}
+              />
+            </IonItem>
+
+            <IonItem lines="none" className="hm-field">
+              <IonLabel position="stacked">Phone (numbers only)</IonLabel>
+              <IonInput
+                value={phone}
+                inputMode="numeric"
+                type="tel"
+                placeholder="961..."
+                onIonInput={(e) => setPhone(digitsOnly(e.detail.value ?? ""))}
+              />
+            </IonItem>
+
+            <IonItem lines="none" className="hm-field">
+              <IonLabel position="stacked">Email</IonLabel>
+              <IonInput
+                value={email}
+                type="email"
+                inputMode="email"
+                placeholder="you@email.com"
+                onIonInput={(e) => setEmail(e.detail.value ?? "")}
+              />
+            </IonItem>
+
+            <IonItem lines="none" className="hm-field">
+              <IonLabel position="stacked">Password</IonLabel>
+              <IonInput
+                value={password}
+                type="password"
+                placeholder="••••••••"
+                onIonInput={(e) => setPassword(e.detail.value ?? "")}
+              />
+            </IonItem>
+
+            <div style={{ height: 14 }} />
+
+            <IonButton expand="block" className="hm-btn-primary" onClick={onRegister}>
+              Create account
+            </IonButton>
+
+            <IonButton
+              expand="block"
+              fill="outline"
+              className="hm-btn-outline"
+              onClick={() => history.push("/login", { from: (location.state as any)?.from } as any)}
+            >
+              Back to login
+            </IonButton>
+          </div>
+
+          <div style={{ height: 28 }} />
+        </div>
+
+        <IonToast isOpen={!!toast} message={toast ?? ""} duration={1800} onDidDismiss={() => setToast(null)} />
       </IonContent>
     </IonPage>
   );

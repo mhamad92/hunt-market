@@ -1,89 +1,116 @@
-import React, { useMemo } from "react";
-import {
-  IonPage,
-  IonHeader,
-  IonToolbar,
-  IonTitle,
-  IonContent,
-  IonCard,
-  IonCardContent,
-  IonText,
-  IonButton,
-  IonIcon,
-} from "@ionic/react";
-import { calendarOutline, chevronForwardOutline } from "ionicons/icons";
+import React, { useMemo, useState } from "react";
+import { IonPage, IonContent, IonSearchbar, IonSelect, IonSelectOption } from "@ionic/react";
 import { useHistory } from "react-router-dom";
-
-type Rental = {
-  id: string;
-  title: string;
-  region: string;
-  pricePerNight: number;
-  image: string;
-  type: "Land" | "Cabin";
-};
+import AppHeader from "../components/AppHeader";
+import { RENTALS } from "../data/rentals";
 
 const Rentals: React.FC = () => {
   const history = useHistory();
 
-  const rentals: Rental[] = useMemo(
-    () => [
-      {
-        id: "r1",
-        title: "Mountain Cabin - Sunset View",
-        region: "Faraya",
-        pricePerNight: 60,
-        type: "Cabin",
-        image:
-          "https://images.unsplash.com/photo-1505691723518-36a5ac3b2d35?auto=format&fit=crop&w=1200&q=60",
-      },
-      {
-        id: "r2",
-        title: "Private Hunting Land (Day Access)",
-        region: "Bekaa",
-        pricePerNight: 25,
-        type: "Land",
-        image:
-          "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=60",
-      },
-    ],
+  const [q, setQ] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "land" | "cabin">("all");
+  const [regionFilter, setRegionFilter] = useState("all");
+
+  const regions = useMemo(
+    () => Array.from(new Set(RENTALS.map((r) => r.region))),
     []
   );
 
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    let list = [...RENTALS];
+
+    if (term)
+      list = list.filter((r) =>
+        `${r.title} ${r.region}`.toLowerCase().includes(term)
+      );
+
+    if (typeFilter !== "all") list = list.filter((r) => r.type === typeFilter);
+    if (regionFilter !== "all") list = list.filter((r) => r.region === regionFilter);
+
+    return list;
+  }, [q, typeFilter, regionFilter]);
+
   return (
     <IonPage>
-      <IonHeader translucent>
-        <IonToolbar>
-          <IonTitle>Rentals</IonTitle>
-        </IonToolbar>
-      </IonHeader>
+      <AppHeader showBack backHref="/home" />
 
-      <IonContent fullscreen className="hm-content">
-        <div className="hm-section">
-          {rentals.map((r) => (
-            <IonCard key={r.id} className="hm-rental-card" button onClick={() => history.push(`/rental/${r.id}`)}>
-              <div className="hm-rental-img" style={{ backgroundImage: `url(${r.image})` }} />
-              <IonCardContent>
-                <div className="hm-badges">
-                  <span className="hm-badge">{r.type}</span>
-                  <span className="hm-badge hm-badge-muted">{r.region}</span>
+      <IonContent fullscreen className="hm-content hm-camo">
+        <div className="hm-wrap" style={{ paddingTop: 18 }}>
+          <div className="hm-hero-title">
+            HUNTING <span>RENTALS</span>
+          </div>
+
+          <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <IonSearchbar
+              className="hm-search"
+              value={q}
+              placeholder="Search lands or cabins..."
+              onIonInput={(e) => setQ(e.detail.value ?? "")}
+            />
+
+            <IonSelect
+              value={typeFilter}
+              interface="popover"
+              className="hm-select-ionic"
+              onIonChange={(e) => setTypeFilter(e.detail.value)}
+            >
+              <IonSelectOption value="all">Type: All</IonSelectOption>
+              <IonSelectOption value="land">Land</IonSelectOption>
+              <IonSelectOption value="cabin">Cabin</IonSelectOption>
+            </IonSelect>
+
+            <IonSelect
+              value={regionFilter}
+              interface="popover"
+              className="hm-select-ionic"
+              onIonChange={(e) => setRegionFilter(e.detail.value)}
+            >
+              <IonSelectOption value="all">Region: All</IonSelectOption>
+              {regions.map((r) => (
+                <IonSelectOption key={r} value={r}>
+                  {r}
+                </IonSelectOption>
+              ))}
+            </IonSelect>
+          </div>
+
+          <div className="hm-grid" style={{ marginTop: 20 }}>
+            {filtered.map((r) => (
+              <div
+                key={r.id}
+                className="hm-product"
+                role="button"
+                onClick={() => history.push(`/rental/${r.id}`)}
+              >
+                <div
+                  className="hm-product-img"
+                  style={{ backgroundImage: `url(${r.image})` }}
+                />
+
+                <div className="hm-product-body">
+                  <p className="hm-product-name">{r.title}</p>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div className="hm-product-price">${r.pricePerDay}/day</div>
+                    <span className="sd-pill">{r.type.toUpperCase()}</span>
+                  </div>
+
+                  <div style={{ marginTop: 6, fontSize: 13, opacity: 0.7 }}>
+                    {r.region}
+                    {r.size && ` • ${r.size}`}
+                    {r.capacity && ` • ${r.capacity} hunters`}
+                  </div>
                 </div>
+              </div>
+            ))}
+          </div>
 
-                <IonText className="hm-rental-title">{r.title}</IonText>
-                <div className="hm-rental-price">${r.pricePerNight} / night</div>
-
-                <div className="hm-rental-actions">
-                  <IonButton fill="outline" size="small">
-                    <IonIcon icon={calendarOutline} slot="start" />
-                    View calendar
-                  </IonButton>
-                  <IonButton fill="clear" size="small">
-                    Details <IonIcon icon={chevronForwardOutline} />
-                  </IonButton>
-                </div>
-              </IonCardContent>
-            </IonCard>
-          ))}
+          {!filtered.length && (
+            <div style={{ marginTop: 24, opacity: 0.7 }}>
+              No rentals found.
+            </div>
+          )}
         </div>
       </IonContent>
     </IonPage>

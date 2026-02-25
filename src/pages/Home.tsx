@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   IonPage,
   IonHeader,
@@ -83,17 +83,23 @@ const Home: React.FC = () => {
 })), []);
 
   // Stores already in cart (for "same store first")
-  const cartStoreIds = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("hm_cart");
-      if (!raw) return new Set<string>();
-      const cart = JSON.parse(raw) as { storeId?: string }[];
-      return new Set(cart.map((c) => c.storeId).filter(Boolean) as string[]);
-    } catch {
-      return new Set<string>();
-    }
-  }, []);
+    const [cartStoreIds, setCartStoreIds] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    const read = () => {
+      try {
+        const raw = localStorage.getItem("hm_cart");
+        const cart = raw ? (JSON.parse(raw) as { storeId?: string }[]) : [];
+        setCartStoreIds(new Set(cart.map((c) => c.storeId).filter(Boolean) as string[]));
+      } catch {
+        setCartStoreIds(new Set());
+      }
+    };
+
+    read();
+    window.addEventListener("hm_cart_updated", read as EventListener);
+    return () => window.removeEventListener("hm_cart_updated", read as EventListener);
+  }, []);
   
 
   const filteredProducts = useMemo(() => {
@@ -109,11 +115,7 @@ const Home: React.FC = () => {
     if (onlyAvailable) list = list.filter((p) => p.price > 0);
 
     if (sameStoreFirst && cartStoreIds.size > 0) {
-      list.sort((a, b) => {
-        const aP = cartStoreIds.has(a.storeId) ? 1 : 0;
-        const bP = cartStoreIds.has(b.storeId) ? 1 : 0;
-        return bP - aP;
-      });
+      list = list.filter((p) => cartStoreIds.has(p.storeId));
     }
 
     switch (sort) {
@@ -214,13 +216,25 @@ const Home: React.FC = () => {
               </IonSelect>
 
               <button
-                className={`hm-toggle ${sameStoreFirst ? "active" : ""}`}
-                onClick={() => setSameStoreFirst((v) => !v)}
-                type="button"
-                title="Prioritize items from stores already in your cart"
-              >
-                Same store
-              </button>
+  className={`hm-toggle ${sameStoreFirst ? "active" : ""}`}
+  onClick={() => {
+    if (cartStoreIds.size === 0) return;
+    setSameStoreFirst((v) => !v);
+  }}
+  type="button"
+  disabled={cartStoreIds.size === 0}
+  style={{
+    opacity: cartStoreIds.size === 0 ? 0.5 : 1,
+    cursor: cartStoreIds.size === 0 ? "not-allowed" : "pointer",
+  }}
+  title={
+    cartStoreIds.size === 0
+      ? "Add an item to cart first"
+      : "Show only items from stores already in your cart"
+  }
+>
+  Same store{cartStoreIds.size > 0 ? ` (${cartStoreIds.size})` : ""}
+</button>
 
               <button
                 className={`hm-toggle ${onlyAvailable ? "active" : ""}`}

@@ -70,6 +70,7 @@ const App: React.FC = () => (
           <Route exact path="/product/:productId" component={ProductDetails} />
           <Route exact path="/store/:storeId" component={StoreDetails} />
           <Route exact path="/rental/:rentalId" component={RentalDetails} />
+          <Route exact path="/rentals" component={Rentals} />
 
           {/* Default */}
           <Route exact path="/">
