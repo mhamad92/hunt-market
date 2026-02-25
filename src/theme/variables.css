@@ -1233,3 +1233,220 @@ ion-select-popover ion-item.ion-focused {
   color: rgba(238,243,238,0.70);
   font-weight: 900;
 }
+
+
+/* ===== Store Details hero final layering fix ===== */
+/* =========================================================
+   Store Details (sd-*) — CLEAN FULL VERSION (no duplicates)
+   ========================================================= */
+
+/* ---- Hero card ---- */
+.sd-hero-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.55);
+}
+
+/* Banner background layer */
+.sd-banner {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(1px) brightness(0.55) saturate(1.05);
+  transform: scale(1.06);
+  z-index: 0;
+}
+
+/* Dark overlay above banner, behind content */
+.sd-hero-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.90));
+  z-index: 1;
+}
+
+/* Content above everything */
+.sd-hero-inner {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  min-height: 132px;
+}
+
+/* Logo */
+.sd-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.55);
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  z-index: 3;
+}
+
+/* Meta */
+.sd-meta {
+  position: relative;
+  z-index: 2;
+}
+
+.sd-name {
+  font-weight: 1100;
+  font-size: 1.25rem;
+  color: rgba(238, 243, 238, 0.98);
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.65);
+}
+
+.sd-region {
+  margin-top: 6px;
+  font-weight: 900;
+  color: rgba(238, 243, 238, 0.75);
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.65);
+}
+
+/* Hero buttons */
+.sd-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.sd-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(209, 161, 74, 0.40);
+  background: linear-gradient(180deg, rgba(209, 161, 74, 0.22), rgba(209, 161, 74, 0.10));
+  color: rgba(238, 243, 238, 0.96);
+  font-weight: 1000;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sd-btn.ghost {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(238, 243, 238, 0.92);
+}
+
+.sd-btn:active {
+  transform: scale(0.99);
+}
+
+/* Stats (right side) */
+.sd-stats {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.sd-stat {
+  min-width: 78px;
+  text-align: center;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.sd-stat-num {
+  font-weight: 1100;
+  color: rgba(238, 243, 238, 0.96);
+}
+
+.sd-stat-lbl {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(238, 243, 238, 0.70);
+}
+
+/* ---- Category chips ---- */
+.sd-chips {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 10px 0 2px;
+  margin-top: 8px;
+}
+
+.sd-chip {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(238, 243, 238, 0.92);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 950;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.sd-chip.active {
+  border-color: rgba(209, 161, 74, 0.45);
+  background: rgba(209, 161, 74, 0.14);
+  color: var(--hm-danger);
+}
+
+/* ---- Product image fix (img + overlay) ---- */
+/* NOTE: This affects ALL places using .hm-product-img.
+   If you only want it in StoreDetails, tell me and I’ll scope it. */
+.hm-product-img {
+  height: 150px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hm-product-img-el {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transform: scale(1.02);
+}
+
+.hm-product-img-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.10) 35%, rgba(0, 0, 0, 0.88) 100%);
+}
+
+/* Card tap feel */
+.sd-product {
+  cursor: pointer;
+}
+
+.sd-product:active {
+  transform: scale(0.99);
+}
+
+/* 18+ pill shadow */
+.sd-pill.warn {
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 520px) {
+  .sd-hero-inner {
+    grid-template-columns: 64px 1fr;
+  }
+  .sd-stats {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}

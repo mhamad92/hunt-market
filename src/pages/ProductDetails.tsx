@@ -289,7 +289,7 @@ const ProductDetails: React.FC = () => {
                 {primaryLabel}
               </button>
 
-              <button className="pd-secondary" onClick={() => history.push(`/stores/${product.storeId}`)} type="button">
+              <button className="pd-secondary" onClick={() => history.push(`/store/${product.storeId}`)} type="button">
                 View store
               </button>
             </div>

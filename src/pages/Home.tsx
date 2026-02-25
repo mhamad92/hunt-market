@@ -38,7 +38,7 @@ const Home: React.FC = () => {
   const [sort, setSort] = useState<"featured" | "price_low" | "price_high" | "name">("featured");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [onlyAvailable, setOnlyAvailable] = useState(false); // placeholder for later
-  const [sameStoreFirst, setSameStoreFirst] = useState<boolean>(true);
+  const [sameStoreFirst, setSameStoreFirst] = useState(false);
 
   // 18+ gate
   const [show18Alert, setShow18Alert] = useState(false);
@@ -93,6 +93,8 @@ const Home: React.FC = () => {
       return new Set<string>();
     }
   }, []);
+
+  
 
   const filteredProducts = useMemo(() => {
     const term = q.trim().toLowerCase();
