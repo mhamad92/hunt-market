@@ -1,9 +1,6 @@
-import type { CapacitorConfig } from '@capacitor/cli';
-
-const config: CapacitorConfig = {
-  appId: 'io.ionic.starter',
-  appName: 'hunt',
-  webDir: 'dist'
+export default {
+  appId: "com.yourapp.hunt",
+  appName: "Hunt",
+  webDir: "dist",
+  bundledWebRuntime: false,
 };
-
-export default config;

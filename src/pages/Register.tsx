@@ -11,7 +11,13 @@ import {
 } from "@ionic/react";
 import { useHistory, useLocation } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
-import { digitsOnly, isValidEmail, registerLocalUser } from "../utils/authLocal";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { auth } from "../firebase";
+
+const PROFILE_KEY = "hm_profile";
+
+const digitsOnly = (v: string) => (v ?? "").replace(/\D/g, "");
+const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 const Register: React.FC = () => {
   const history = useHistory();
@@ -46,12 +52,16 @@ const Register: React.FC = () => {
     }
 
     try {
-      registerLocalUser({
-        fullName,
-        phone: phoneDigits,
-        email: emailTrim,
-        password,
-      });
+      const res = await createUserWithEmailAndPassword(auth, emailTrim, password);
+
+      // set display name in Firebase Auth
+      await updateProfile(res.user, { displayName: fullName });
+
+      // keep your existing "fast checkout" local profile
+      localStorage.setItem(
+        PROFILE_KEY,
+        JSON.stringify({ fullName, phone: phoneDigits, email: emailTrim })
+      );
 
       const backTo = (location.state as any)?.from ?? "/profile";
       history.replace(backTo);
@@ -62,7 +72,7 @@ const Register: React.FC = () => {
 
   return (
     <IonPage>
-      <AppHeader />
+       <AppHeader showBack backHref="/home" />
 
       <IonContent fullscreen className="hm-content hm-camo">
         <div className="hm-hero hm-camo" style={{ paddingBottom: 18 }}>

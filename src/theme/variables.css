@@ -2526,12 +2526,111 @@ ion-text * {
   transform: translateY(0);
 }
 
-/* Small collapse (password) */
-.hm-collapse.pw.open {
-  max-height: 520px;
+/* sizes */
+.hm-collapse.pw.open { max-height: 520px; }
+.hm-collapse.addr.open { max-height: 1200px; }
+.hm-collapse.profile.open { max-height: 700px; }
+
+
+/* raffle grid cells */
+.hm-raffle-cell{
+  border-radius: 14px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  text-align: left;
+  transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+}
+.hm-raffle-cell:hover{ transform: translateY(-1px); }
+.hm-raffle-cell:disabled{ opacity: 0.55; cursor: not-allowed; }
+
+.hm-raffle-cell.free{
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+.hm-raffle-cell.reserved{
+  background: rgba(255,255,255,0.02);
+  border-color: rgba(255,255,255,0.06);
 }
 
-/* Large collapse (address form) */
-.hm-collapse.addr.open {
-  max-height: 1200px;
+.hm-raffle-num{
+  font-weight: 1100;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+}
+.hm-raffle-name{
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: 900;
+}
+
+/* winner banner */
+.hm-winner{
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+/* simple modal */
+.hm-modal{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+.hm-modal-card{
+  width: min(520px, calc(100vw - 28px));
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(20,20,20,0.92);
+  border: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(10px);
+}
+
+/* draw overlay + animation */
+.hm-draw-overlay{
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(0,0,0,0.55), rgba(0,0,0,0.85));
+  display: grid;
+  place-items: center;
+  z-index: 99999;
+}
+.hm-draw-card{
+  width: min(520px, calc(100vw - 28px));
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(20,20,20,0.92);
+  border: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(10px);
+  text-align: center;
+}
+.hm-draw-title{
+  font-weight: 1100;
+  font-size: 18px;
+}
+.hm-draw-spinner{
+  width: 54px;
+  height: 54px;
+  margin: 14px auto 0;
+  border-radius: 999px;
+  border: 3px solid rgba(255,255,255,0.15);
+  border-top-color: rgba(255,255,255,0.9);
+  animation: hmSpin 0.8s linear infinite;
+}
+@keyframes hmSpin{ to { transform: rotate(360deg); } }
+
+.hm-draw-reveal{
+  margin-top: 16px;
+  font-size: 34px;
+  font-weight: 1200;
+  letter-spacing: 1px;
+  animation: hmPulse 0.35s ease-in-out infinite alternate;
+}
+@keyframes hmPulse{
+  from{ transform: scale(0.98); opacity: 0.85; }
+  to{ transform: scale(1.04); opacity: 1; }
 }

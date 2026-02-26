@@ -1,4 +1,4 @@
-import React from "react";
+import React ,{useEffect} from "react";
 import {
   IonApp,
   IonIcon,
@@ -12,7 +12,15 @@ import {
 import { IonReactRouter } from "@ionic/react-router";
 import { Redirect, Route } from "react-router-dom";
 import { homeOutline, businessOutline, mapOutline, personOutline } from "ionicons/icons";
-import './theme/variables.css';
+import { giftOutline } from "ionicons/icons";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminRaffle from "./pages/AdminRaffle";
+import { setupPushNotifications } from "./push";
+import { auth } from "./firebase";
+
+
+
+import "./theme/variables.css";
 
 /* Tab pages */
 import Home from "./pages/Home";
@@ -30,6 +38,10 @@ import ProductDetails from "./pages/ProductDetails";
 import StoreDetails from "./pages/StoreDetails";
 import RentalDetails from "./pages/RentalDetails";
 
+/* Raffles */
+import Raffles from "./pages/Raffles";
+import RaffleDetails from "./pages/RaffleDetails";
+
 /* Core CSS */
 import "@ionic/react/css/core.css";
 import "@ionic/react/css/normalize.css";
@@ -44,13 +56,29 @@ import "@ionic/react/css/text-transformation.css";
 import "@ionic/react/css/flex-utils.css";
 import "@ionic/react/css/display.css";
 
+
+
 setupIonicReact();
 
-const App: React.FC = () => (
+
+
+const App: React.FC = () => {
+
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(async (u) => {
+      if (u) {
+        await setupPushNotifications();
+      }
+    });
+
+    return () => unsub();
+  }, []);
+
+  return (
   <IonApp>
+
     <IonReactRouter>
       <IonTabs>
-        {/* IMPORTANT: One IonRouterOutlet for BOTH tab routes + stack routes */}
         <IonRouterOutlet>
           {/* Tabs */}
           <Route exact path="/home" component={Home} />
@@ -58,10 +86,7 @@ const App: React.FC = () => (
           <Route exact path="/rentals" component={Rentals} />
           <Route exact path="/profile" component={Profile} />
 
-          {/* Product Details (IMPORTANT: outside tab root pages is fine) */}
-          <Route exact path="/product/:productId" component={ProductDetails} />
-
-          {/* Stack pages (not in tab bar, but still route normally) */}
+          {/* Stack pages */}
           <Route exact path="/cart" component={Cart} />
           <Route exact path="/checkout" component={Checkout} />
           <Route exact path="/login" component={Login} />
@@ -70,7 +95,12 @@ const App: React.FC = () => (
           <Route exact path="/product/:productId" component={ProductDetails} />
           <Route exact path="/store/:storeId" component={StoreDetails} />
           <Route exact path="/rental/:rentalId" component={RentalDetails} />
-          <Route exact path="/rentals" component={Rentals} />
+          <Route exact path="/admin" component={AdminDashboard} />
+          <Route exact path="/admin/raffles/:raffleId" component={AdminRaffle} />
+
+          {/* Raffles (stack, not a tab) */}
+          <Route exact path="/raffles" component={Raffles} />
+          <Route exact path="/raffles/:raffleId" component={RaffleDetails} />
 
           {/* Default */}
           <Route exact path="/">
@@ -83,7 +113,6 @@ const App: React.FC = () => (
           </Route>
         </IonRouterOutlet>
 
-        {/* Bottom tabs */}
         <IonTabBar slot="bottom">
           <IonTabButton tab="home" href="/home">
             <IonIcon icon={homeOutline} />
@@ -100,6 +129,12 @@ const App: React.FC = () => (
             <IonLabel>Rentals</IonLabel>
           </IonTabButton>
 
+           <IonTabButton tab="raffles" href="/raffles">
+          <IonIcon icon={giftOutline} />
+          <IonLabel>Raffles</IonLabel>
+        </IonTabButton>
+
+
           <IonTabButton tab="profile" href="/profile">
             <IonIcon icon={personOutline} />
             <IonLabel>Profile</IonLabel>
@@ -109,5 +144,6 @@ const App: React.FC = () => (
     </IonReactRouter>
   </IonApp>
 );
+};
 
 export default App;

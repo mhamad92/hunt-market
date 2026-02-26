@@ -3,7 +3,13 @@ import { IonContent, IonPage, IonToast } from "@ionic/react";
 import { useHistory } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import { notifyCartUpdated } from "../utils/cartBus";
-import { logoutLocalUser, changeLocalPassword } from "../utils/authLocal";
+import { auth } from "../firebase";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  signOut,
+} from "firebase/auth";
 
 type ProfileData = {
   fullName: string;
@@ -25,7 +31,6 @@ type Address = {
 
 const PROFILE_KEY = "hm_profile";
 const ADDR_KEY = "hm_addresses";
-const LOGGED_KEY = "hm_logged_in";
 
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -65,18 +70,30 @@ function writeAddresses(list: Address[]) {
 
 const Profile: React.FC = () => {
   const history = useHistory();
-
   const [toast, setToast] = useState<string>("");
 
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    localStorage.getItem(LOGGED_KEY) === "1"
-  );
+  // ✅ Firebase login state (replaces hm_logged_in)
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(!!auth.currentUser);
 
-  // Profile + Addresses state
+  // DATA (still local for fast checkout)
   const [profile, setProfile] = useState<ProfileData>(() => readProfile());
   const [addresses, setAddresses] = useState<Address[]>(() => readAddresses());
 
-  // Address editor
+  // PROFILE EDIT DROPDOWN
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<ProfileData>(() => readProfile());
+
+  useEffect(() => {
+    setProfileDraft(profile);
+  }, [profile]);
+
+  // PASSWORD (Firebase)
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwNew2, setPwNew2] = useState("");
+  const [showPw, setShowPw] = useState(false);
+
+  // ADDRESS EDITOR
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = useMemo(
     () => addresses.find((a) => a.id === editingId) || null,
@@ -95,39 +112,32 @@ const Profile: React.FC = () => {
     isDefault: false,
   }));
 
-  const onChangePassword = () => {
-  if (!pwCurrent || !pwNew || !pwNew2) return setToast("Fill all password fields.");
-  if (pwNew !== pwNew2) return setToast("New passwords do not match.");
-
-  try {
-    changeLocalPassword(pwCurrent, pwNew);
-    setPwCurrent("");
-    setPwNew("");
-    setPwNew2("");
-    setToast("Password updated.");
-  } catch (e: any) {
-    setToast(e?.message || "Could not update password.");
-  }
-};
-
+  // ✅ Listen to Firebase auth changes
   useEffect(() => {
-    // keep in sync if user logs in/out in other pages
-    const onFocus = () => setIsLoggedIn(localStorage.getItem(LOGGED_KEY) === "1");
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    const unsub = auth.onAuthStateChanged((u) => {
+      setIsLoggedIn(!!u);
+
+      // Optional: auto-fill local profile email/name from Firebase
+      if (u) {
+        const current = readProfile();
+        const next: ProfileData = {
+          fullName: current.fullName || u.displayName || "",
+          phone: current.phone || "",
+          email: current.email || u.email || "",
+        };
+        setProfile(next);
+        writeProfile(next);
+      }
+    });
+    return () => unsub();
   }, []);
 
-  const [pwCurrent, setPwCurrent] = useState("");
-  const [pwNew, setPwNew] = useState("");
-  const [pwNew2, setPwNew2] = useState("");
-  const [showPw, setShowPw] = useState(false);
-
+  // keep local data refreshed
   useEffect(() => {
-  setProfile(readProfile());
-  setAddresses(readAddresses());
-}, [isLoggedIn]);
+    setProfile(readProfile());
+    setAddresses(readAddresses());
+  }, [isLoggedIn]);
 
-  // When opening editor
   useEffect(() => {
     if (!editing) return;
     setAddrForm({
@@ -143,12 +153,26 @@ const Profile: React.FC = () => {
     });
   }, [editing]);
 
-  const saveProfile = () => {
-    if (!profile.fullName.trim()) return setToast("Full name is required.");
-    if (!profile.phone.trim()) return setToast("Phone number is required.");
+  const defaultAddr = useMemo(
+    () => addresses.find((a) => a.isDefault) || null,
+    [addresses]
+  );
 
-    writeProfile(profile);
-    setToast("Profile saved.");
+  // ACTIONS
+  const saveProfileFromDraft = () => {
+    const next: ProfileData = {
+      fullName: profileDraft.fullName.trim(),
+      phone: profileDraft.phone.trim(),
+      email: profileDraft.email.trim(),
+    };
+
+    if (!next.fullName) return setToast("Full name is required.");
+    if (!next.phone) return setToast("Phone number is required.");
+
+    setProfile(next);
+    writeProfile(next);
+    setEditProfileOpen(false);
+    setToast("Profile updated.");
   };
 
   const openNewAddress = () => {
@@ -162,7 +186,7 @@ const Profile: React.FC = () => {
       building: "",
       floor: "",
       notes: "",
-      isDefault: addresses.length === 0, // first one default
+      isDefault: addresses.length === 0,
     });
   };
 
@@ -190,9 +214,7 @@ const Profile: React.FC = () => {
 
   const deleteAddress = (id: string) => {
     const next = addresses.filter((a) => a.id !== id);
-    // ensure at least one default if list not empty
     if (next.length && !next.some((a) => a.isDefault)) next[0].isDefault = true;
-
     setAddresses(next);
     writeAddresses(next);
     setToast("Address removed.");
@@ -221,9 +243,7 @@ const Profile: React.FC = () => {
       isDefault: !!addrForm.isDefault,
     };
 
-    if (payload.isDefault) {
-      next = next.map((a) => ({ ...a, isDefault: false }));
-    }
+    if (payload.isDefault) next = next.map((a) => ({ ...a, isDefault: false }));
 
     if (isNew) next.unshift(payload);
     else next = next.map((a) => (a.id === id ? payload : a));
@@ -236,364 +256,407 @@ const Profile: React.FC = () => {
     cancelAddressEdit();
   };
 
-  const logout = () => {
-  logoutLocalUser();
-  setIsLoggedIn(false);
-  notifyCartUpdated();
-  setToast("Logged out.");
-};
+  // ✅ Firebase password change
+  const onChangePassword = async () => {
+    const user = auth.currentUser;
+    if (!user || !user.email) return setToast("You must be logged in.");
 
-  const defaultAddr = useMemo(
-    () => addresses.find((a) => a.isDefault) || null,
-    [addresses]
-  );
+    if (!pwCurrent || !pwNew || !pwNew2) return setToast("Fill all password fields.");
+    if (pwNew !== pwNew2) return setToast("New passwords do not match.");
+    if (pwNew.length < 6) return setToast("New password must be at least 6 characters.");
+
+    try {
+      const cred = EmailAuthProvider.credential(user.email, pwCurrent);
+      await reauthenticateWithCredential(user, cred);
+      await updatePassword(user, pwNew);
+
+      setPwCurrent("");
+      setPwNew("");
+      setPwNew2("");
+      setShowPw(false);
+      setToast("Password updated.");
+    } catch (e: any) {
+      setToast(e?.message || "Could not update password.");
+    }
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+    notifyCartUpdated();
+    setToast("Logged out.");
+  };
 
   return (
-  <IonPage>
-    <AppHeader />
+    <IonPage>
+       <AppHeader showBack backHref="/home" />
 
-    <IonContent fullscreen className="hm-content hm-camo">
-      <div className="hm-wrap" style={{ paddingTop: 14, paddingBottom: 26 }}>
-        {!isLoggedIn ? (
-          <div className="hm-auth-card" style={{ maxWidth: 560, margin: "0 auto" }}>
-            <div style={{ fontWeight: 1000, fontSize: 20 }}>Welcome</div>
-            <div style={{ opacity: 0.8, marginTop: 8, lineHeight: 1.5 }}>
-              Log in to checkout orders and request bookings.
-            </div>
-
-            <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-              <button className="pd-primary" onClick={() => history.push("/login")} type="button">
-                Log in
-              </button>
-              <button className="pd-secondary" onClick={() => history.push("/register")} type="button">
-                Create account
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Profile Card */}
-            <div className="hm-auth-card" style={{ maxWidth: 960, margin: "0 auto" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 1100, fontSize: 20 }}>Your Profile</div>
-                  <div style={{ opacity: 0.75, marginTop: 4 }}>
-                    Saved locally for faster checkout.
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button className="pd-secondary" onClick={() => history.push("/home")} type="button">
-                    Continue shopping
-                  </button>
-                  <button className="pd-secondary" onClick={logout} type="button">
-                    Log out
-                  </button>
-                </div>
+      <IonContent fullscreen className="hm-content hm-camo">
+        <div className="hm-wrap" style={{ paddingTop: 14, paddingBottom: 26 }}>
+          {!isLoggedIn ? (
+            <div className="hm-auth-card" style={{ maxWidth: 560, margin: "0 auto" }}>
+              <div style={{ fontWeight: 1000, fontSize: 20 }}>Welcome</div>
+              <div style={{ opacity: 0.8, marginTop: 8, lineHeight: 1.5 }}>
+                Log in to checkout orders and request bookings.
               </div>
 
-              <div className="profile-grid" style={{ marginTop: 14 }}>
-                <div className="profile-field">
-                  <div className="profile-label">Full name</div>
-                  <input
-                    className="profile-input"
-                    value={profile.fullName}
-                    onChange={(e) => setProfile((p) => ({ ...p, fullName: e.target.value }))}
-                    placeholder="Mohamad Houmani"
-                  />
-                </div>
-
-                <div className="profile-field">
-                  <div className="profile-label">Phone</div>
-                  <input
-                    className="profile-input"
-                    value={profile.phone}
-                    onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
-                    placeholder="+961 ..."
-                    inputMode="tel"
-                  />
-                </div>
-
-                <div className="profile-field">
-                  <div className="profile-label">Email (optional)</div>
-                  <input
-                    className="profile-input"
-                    value={profile.email}
-                    onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
-                    placeholder="name@email.com"
-                    inputMode="email"
-                  />
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <button className="pd-primary" onClick={saveProfile} type="button">
-                  Save profile
+              <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                <button className="pd-primary" onClick={() => history.push("/login")} type="button">
+                  Log in
+                </button>
+                <button className="pd-secondary" onClick={() => history.push("/register")} type="button">
+                  Create account
                 </button>
               </div>
             </div>
+          ) : (
+            <>
+              {/* PROFILE */}
+              <div className="hm-auth-card" style={{ maxWidth: 960, margin: "0 auto" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 1100, fontSize: 20 }}>Your Profile</div>
+                    <div style={{ opacity: 0.75, marginTop: 4 }}>Saved locally for faster checkout.</div>
+                  </div>
 
-            {/* Addresses */}
-            <div className="hm-auth-card" style={{ maxWidth: 960, margin: "14px auto 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 1100, fontSize: 20 }}>Addresses</div>
-                  <div style={{ opacity: 0.75, marginTop: 4 }}>
-                    Default address will be used in Checkout.
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button className="pd-secondary" onClick={() => history.push("/home")} type="button">
+                      Continue shopping
+                    </button>
+                    <button className="pd-secondary" onClick={logout} type="button">
+                      Log out
+                    </button>
+
+                    <button
+                      className={editProfileOpen ? "pd-secondary" : "pd-primary"}
+                      type="button"
+                      onClick={() => setEditProfileOpen((v) => !v)}
+                    >
+                      {editProfileOpen ? "Close" : "Edit"}
+                    </button>
                   </div>
                 </div>
 
-                <button
-                  className={editingId ? "pd-secondary" : "pd-primary"}
-                  type="button"
-                  onClick={() => {
-                    if (editingId) cancelAddressEdit();
-                    else openNewAddress();
-                  }}
-                >
-                  {editingId ? "Close" : "+ Add address"}
-                </button>
-              </div>
-
-              {defaultAddr && (
-                <div className="profile-default" style={{ marginTop: 12 }}>
-                  <div style={{ fontWeight: 1000 }}>Default</div>
-                  <div style={{ opacity: 0.85, marginTop: 4 }}>
-                    {defaultAddr.label} • {defaultAddr.city}, {defaultAddr.area}, {defaultAddr.street}
-                    {defaultAddr.building ? `, ${defaultAddr.building}` : ""}
-                    {defaultAddr.floor ? `, Floor ${defaultAddr.floor}` : ""}
+                <div className="addr-list" style={{ marginTop: 12 }}>
+                  <div className="addr-card">
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={{ fontWeight: 1000 }}>{profile.fullName || "—"}</div>
+                      <div style={{ opacity: 0.85 }}>Phone: {profile.phone || "—"}</div>
+                      <div style={{ opacity: 0.85 }}>Email: {profile.email || "—"}</div>
+                    </div>
                   </div>
                 </div>
-              )}
 
-              <div className="addr-list" style={{ marginTop: 12 }}>
-                {addresses.length === 0 ? (
-                  <div style={{ opacity: 0.75 }}>No saved addresses yet.</div>
-                ) : (
-                  addresses.map((a) => (
-                    <div key={a.id} className="addr-card">
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                        <div>
-                          <div style={{ fontWeight: 1000 }}>
-                            {a.label} {a.isDefault ? <span className="addr-pill">Default</span> : null}
-                          </div>
-                          <div style={{ opacity: 0.85, marginTop: 4, lineHeight: 1.4 }}>
-                            {a.city}, {a.area}, {a.street}
-                            {a.building ? `, ${a.building}` : ""}
-                            {a.floor ? `, Floor ${a.floor}` : ""}
-                          </div>
-                          {a.notes ? <div style={{ opacity: 0.65, marginTop: 6 }}>{a.notes}</div> : null}
-                        </div>
+                <div className={`hm-collapse profile ${editProfileOpen ? "open" : ""}`}>
+                  <div style={{ marginTop: 14 }} className="addr-editor">
+                    <div style={{ fontWeight: 1100, fontSize: 18 }}>Edit profile</div>
 
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                          {!a.isDefault ? (
-                            <button className="pd-secondary" onClick={() => setDefaultAddress(a.id)} type="button">
-                              Set default
-                            </button>
-                          ) : null}
-                          <button className="pd-secondary" onClick={() => setEditingId(a.id)} type="button">
-                            Edit
-                          </button>
-                          <button className="pd-secondary" onClick={() => deleteAddress(a.id)} type="button">
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Inline editor (dropdown inside Addresses card) */}
-              <div className={`hm-collapse addr ${editingId ? "open" : ""}`}>
-                {editingId && (
-                  <div className="addr-editor" style={{ marginTop: 14 }}>
-                    <div style={{ fontWeight: 1100, fontSize: 18 }}>
-                      {editingId === "NEW" ? "Add address" : "Edit address"}
-                    </div>
-
-                    <div className="addr-grid" style={{ marginTop: 12 }}>
+                    <div className="profile-grid" style={{ marginTop: 12 }}>
                       <div className="profile-field">
-                        <div className="profile-label">Label</div>
+                        <div className="profile-label">Full name</div>
                         <input
                           className="profile-input"
-                          value={addrForm.label}
-                          onChange={(e) => setAddrForm((a) => ({ ...a, label: e.target.value }))}
-                          placeholder="Home / Work"
+                          value={profileDraft.fullName}
+                          onChange={(e) => setProfileDraft((p) => ({ ...p, fullName: e.target.value }))}
+                          placeholder="Mohamad Houmani"
                         />
                       </div>
 
                       <div className="profile-field">
-                        <div className="profile-label">City</div>
+                        <div className="profile-label">Phone (numbers only)</div>
                         <input
                           className="profile-input"
-                          value={addrForm.city}
-                          onChange={(e) => setAddrForm((a) => ({ ...a, city: e.target.value }))}
-                          placeholder="Enter City"
+                          value={profileDraft.phone}
+                          onChange={(e) =>
+                            setProfileDraft((p) => ({ ...p, phone: (e.target.value ?? "").replace(/\D/g, "") }))
+                          }
+                          placeholder="70971299"
+                          inputMode="numeric"
                         />
                       </div>
 
                       <div className="profile-field">
-                        <div className="profile-label">Area</div>
+                        <div className="profile-label">Email (optional)</div>
                         <input
                           className="profile-input"
-                          value={addrForm.area}
-                          onChange={(e) => setAddrForm((a) => ({ ...a, area: e.target.value }))}
-                          placeholder="Enter Area"
+                          value={profileDraft.email}
+                          onChange={(e) => setProfileDraft((p) => ({ ...p, email: e.target.value }))}
+                          placeholder="name@email.com"
+                          inputMode="email"
                         />
-                      </div>
-
-                      <div className="profile-field" style={{ gridColumn: "1 / -1" }}>
-                        <div className="profile-label">Street</div>
-                        <input
-                          className="profile-input"
-                          value={addrForm.street}
-                          onChange={(e) => setAddrForm((a) => ({ ...a, street: e.target.value }))}
-                          placeholder="Street name + number"
-                        />
-                      </div>
-
-                      <div className="profile-field">
-                        <div className="profile-label">Building</div>
-                        <input
-                          className="profile-input"
-                          value={addrForm.building ?? ""}
-                          onChange={(e) => setAddrForm((a) => ({ ...a, building: e.target.value }))}
-                          placeholder="Building name"
-                        />
-                      </div>
-
-                      <div className="profile-field">
-                        <div className="profile-label">Floor</div>
-                        <input
-                          className="profile-input"
-                          value={addrForm.floor ?? ""}
-                          onChange={(e) => setAddrForm((a) => ({ ...a, floor: e.target.value }))}
-                          placeholder=""
-                        />
-                      </div>
-
-                      <div className="profile-field" style={{ gridColumn: "1 / -1" }}>
-                        <div className="profile-label">Notes (optional)</div>
-                        <input
-                          className="profile-input"
-                          value={addrForm.notes ?? ""}
-                          onChange={(e) => setAddrForm((a) => ({ ...a, notes: e.target.value }))}
-                          placeholder=""
-                        />
-                      </div>
-
-                      <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        <label className="addr-check">
-                          <input
-                            type="checkbox"
-                            checked={!!addrForm.isDefault}
-                            onChange={(e) => setAddrForm((a) => ({ ...a, isDefault: e.target.checked }))}
-                          />
-                          <span>Set as default</span>
-                        </label>
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-                      <button className="pd-primary" onClick={saveAddress} type="button">
-                        Save address
+                    <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <button className="pd-primary" onClick={saveProfileFromDraft} type="button">
+                        Save
                       </button>
-                      <button className="pd-secondary" onClick={cancelAddressEdit} type="button">
+                      <button
+                        className="pd-secondary"
+                        type="button"
+                        onClick={() => {
+                          setProfileDraft(profile);
+                          setEditProfileOpen(false);
+                        }}
+                      >
                         Cancel
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Security */}
-            <div className="hm-auth-card" style={{ maxWidth: 960, margin: "14px auto 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 1100, fontSize: 20 }}>Security</div>
-                  <div style={{ opacity: 0.75, marginTop: 4 }}>
-                    Manage your password (saved locally for now).
-                  </div>
                 </div>
-
-                <button
-                  className={showPw ? "pd-secondary" : "pd-primary"}
-                  type="button"
-                  onClick={() => setShowPw((v) => !v)}
-                >
-                  {showPw ? "Close" : "Change password"}
-                </button>
               </div>
 
-              <div className={`hm-collapse pw ${showPw ? "open" : ""}`}>
-                <div className="addr-grid" style={{ marginTop: 12 }}>
-                  <div className="profile-field">
-                    <div className="profile-label">Current password</div>
-                    <input
-                      className="profile-input"
-                      type="password"
-                      value={pwCurrent}
-                      onChange={(e) => setPwCurrent(e.target.value)}
-                      placeholder="••••••••"
-                    />
+              {/* ADDRESSES */}
+              <div className="hm-auth-card" style={{ maxWidth: 960, margin: "14px auto 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 1100, fontSize: 20 }}>Addresses</div>
+                    <div style={{ opacity: 0.75, marginTop: 4 }}>Default address will be used in Checkout.</div>
                   </div>
 
-                  <div className="profile-field">
-                    <div className="profile-label">New password</div>
-                    <input
-                      className="profile-input"
-                      type="password"
-                      value={pwNew}
-                      onChange={(e) => setPwNew(e.target.value)}
-                      placeholder="At least 6 characters"
-                    />
-                  </div>
-
-                  <div className="profile-field">
-                    <div className="profile-label">Confirm new password</div>
-                    <input
-                      className="profile-input"
-                      type="password"
-                      value={pwNew2}
-                      onChange={(e) => setPwNew2(e.target.value)}
-                      placeholder="Repeat new password"
-                    />
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button className="pd-primary" onClick={onChangePassword} type="button">
-                    Update password
-                  </button>
                   <button
-                    className="pd-secondary"
-                    onClick={() => {
-                      setPwCurrent("");
-                      setPwNew("");
-                      setPwNew2("");
-                      setShowPw(false);
-                    }}
+                    className={editingId ? "pd-secondary" : "pd-primary"}
                     type="button"
+                    onClick={() => {
+                      if (editingId) cancelAddressEdit();
+                      else openNewAddress();
+                    }}
                   >
-                    Clear
+                    {editingId ? "Close" : "+ Add address"}
                   </button>
                 </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
 
-      <IonToast
-        isOpen={!!toast}
-        message={toast}
-        duration={1400}
-        onDidDismiss={() => setToast("")}
-      />
-    </IonContent>
-  </IonPage>
-);
+                {defaultAddr && (
+                  <div className="profile-default" style={{ marginTop: 12 }}>
+                    <div style={{ fontWeight: 1000 }}>Default</div>
+                    <div style={{ opacity: 0.85, marginTop: 4 }}>
+                      {defaultAddr.label} • {defaultAddr.city}, {defaultAddr.area}, {defaultAddr.street}
+                      {defaultAddr.building ? `, ${defaultAddr.building}` : ""}
+                      {defaultAddr.floor ? `, Floor ${defaultAddr.floor}` : ""}
+                    </div>
+                  </div>
+                )}
+
+                <div className="addr-list" style={{ marginTop: 12 }}>
+                  {addresses.length === 0 ? (
+                    <div style={{ opacity: 0.75 }}>No saved addresses yet.</div>
+                  ) : (
+                    addresses.map((a) => (
+                      <div key={a.id} className="addr-card">
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                          <div>
+                            <div style={{ fontWeight: 1000 }}>
+                              {a.label} {a.isDefault ? <span className="addr-pill">Default</span> : null}
+                            </div>
+                            <div style={{ opacity: 0.85, marginTop: 4, lineHeight: 1.4 }}>
+                              {a.city}, {a.area}, {a.street}
+                              {a.building ? `, ${a.building}` : ""}
+                              {a.floor ? `, Floor ${a.floor}` : ""}
+                            </div>
+                            {a.notes ? <div style={{ opacity: 0.65, marginTop: 6 }}>{a.notes}</div> : null}
+                          </div>
+
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            {!a.isDefault ? (
+                              <button className="pd-secondary" onClick={() => setDefaultAddress(a.id)} type="button">
+                                Set default
+                              </button>
+                            ) : null}
+                            <button className="pd-secondary" onClick={() => setEditingId(a.id)} type="button">
+                              Edit
+                            </button>
+                            <button className="pd-secondary" onClick={() => deleteAddress(a.id)} type="button">
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className={`hm-collapse addr ${editingId ? "open" : ""}`}>
+                  {editingId && (
+                    <div className="addr-editor" style={{ marginTop: 14 }}>
+                      <div style={{ fontWeight: 1100, fontSize: 18 }}>
+                        {editingId === "NEW" ? "Add address" : "Edit address"}
+                      </div>
+
+                      <div className="addr-grid" style={{ marginTop: 12 }}>
+                        <div className="profile-field">
+                          <div className="profile-label">Label</div>
+                          <input
+                            className="profile-input"
+                            value={addrForm.label}
+                            onChange={(e) => setAddrForm((a) => ({ ...a, label: e.target.value }))}
+                            placeholder="Home / Work"
+                          />
+                        </div>
+
+                        <div className="profile-field">
+                          <div className="profile-label">City</div>
+                          <input
+                            className="profile-input"
+                            value={addrForm.city}
+                            onChange={(e) => setAddrForm((a) => ({ ...a, city: e.target.value }))}
+                            placeholder="Enter City"
+                          />
+                        </div>
+
+                        <div className="profile-field">
+                          <div className="profile-label">Area</div>
+                          <input
+                            className="profile-input"
+                            value={addrForm.area}
+                            onChange={(e) => setAddrForm((a) => ({ ...a, area: e.target.value }))}
+                            placeholder="Enter Area"
+                          />
+                        </div>
+
+                        <div className="profile-field" style={{ gridColumn: "1 / -1" }}>
+                          <div className="profile-label">Street</div>
+                          <input
+                            className="profile-input"
+                            value={addrForm.street}
+                            onChange={(e) => setAddrForm((a) => ({ ...a, street: e.target.value }))}
+                            placeholder="Street name + number"
+                          />
+                        </div>
+
+                        <div className="profile-field">
+                          <div className="profile-label">Building</div>
+                          <input
+                            className="profile-input"
+                            value={addrForm.building ?? ""}
+                            onChange={(e) => setAddrForm((a) => ({ ...a, building: e.target.value }))}
+                            placeholder="Building name"
+                          />
+                        </div>
+
+                        <div className="profile-field">
+                          <div className="profile-label">Floor</div>
+                          <input
+                            className="profile-input"
+                            value={addrForm.floor ?? ""}
+                            onChange={(e) => setAddrForm((a) => ({ ...a, floor: e.target.value }))}
+                            placeholder=""
+                          />
+                        </div>
+
+                        <div className="profile-field" style={{ gridColumn: "1 / -1" }}>
+                          <div className="profile-label">Notes (optional)</div>
+                          <input
+                            className="profile-input"
+                            value={addrForm.notes ?? ""}
+                            onChange={(e) => setAddrForm((a) => ({ ...a, notes: e.target.value }))}
+                            placeholder=""
+                          />
+                        </div>
+
+                        <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <label className="addr-check">
+                            <input
+                              type="checkbox"
+                              checked={!!addrForm.isDefault}
+                              onChange={(e) => setAddrForm((a) => ({ ...a, isDefault: e.target.checked }))}
+                            />
+                            <span>Set as default</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                        <button className="pd-primary" onClick={saveAddress} type="button">
+                          Save address
+                        </button>
+                        <button className="pd-secondary" onClick={cancelAddressEdit} type="button">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* SECURITY (Firebase) */}
+              <div className="hm-auth-card" style={{ maxWidth: 960, margin: "14px auto 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 1100, fontSize: 20 }}>Security</div>
+                    <div style={{ opacity: 0.75, marginTop: 4 }}>Change your Firebase password.</div>
+                  </div>
+
+                  <button
+                    className={showPw ? "pd-secondary" : "pd-primary"}
+                    type="button"
+                    onClick={() => setShowPw((v) => !v)}
+                  >
+                    {showPw ? "Close" : "Change password"}
+                  </button>
+                </div>
+
+                <div className={`hm-collapse pw ${showPw ? "open" : ""}`}>
+                  <div className="addr-grid" style={{ marginTop: 12 }}>
+                    <div className="profile-field">
+                      <div className="profile-label">Current password</div>
+                      <input
+                        className="profile-input"
+                        type="password"
+                        value={pwCurrent}
+                        onChange={(e) => setPwCurrent(e.target.value)}
+                        placeholder="••••••••"
+                      />
+                    </div>
+
+                    <div className="profile-field">
+                      <div className="profile-label">New password</div>
+                      <input
+                        className="profile-input"
+                        type="password"
+                        value={pwNew}
+                        onChange={(e) => setPwNew(e.target.value)}
+                        placeholder="At least 6 characters"
+                      />
+                    </div>
+
+                    <div className="profile-field">
+                      <div className="profile-label">Confirm new password</div>
+                      <input
+                        className="profile-input"
+                        type="password"
+                        value={pwNew2}
+                        onChange={(e) => setPwNew2(e.target.value)}
+                        placeholder="Repeat new password"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button className="pd-primary" onClick={onChangePassword} type="button">
+                      Update password
+                    </button>
+                    <button
+                      className="pd-secondary"
+                      onClick={() => {
+                        setPwCurrent("");
+                        setPwNew("");
+                        setPwNew2("");
+                        setShowPw(false);
+                      }}
+                      type="button"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <IonToast isOpen={!!toast} message={toast} duration={1400} onDidDismiss={() => setToast("")} />
+      </IonContent>
+    </IonPage>
+  );
 };
+
 export default Profile;

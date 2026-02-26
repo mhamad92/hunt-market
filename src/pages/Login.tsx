@@ -11,7 +11,8 @@ import {
 } from "@ionic/react";
 import { useHistory, useLocation } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
-import { isValidEmail, loginLocalUser } from "../utils/authLocal";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase";
 
 const Login: React.FC = () => {
   const history = useHistory();
@@ -26,16 +27,13 @@ const Login: React.FC = () => {
       setToast("Please enter email and password.");
       return;
     }
-    if (!isValidEmail(email)) {
-      setToast("Please enter a valid email.");
-      return;
-    }
 
     try {
-      loginLocalUser(email, password);
+      await signInWithEmailAndPassword(auth, email, password);
 
-      const backTo = (location.state as any)?.from ?? "/profile";
+      const backTo = (location.state as any)?.from ?? "/home";
       history.replace(backTo);
+
     } catch (e: any) {
       setToast(e?.message || "Login failed.");
     }
@@ -43,8 +41,7 @@ const Login: React.FC = () => {
 
   return (
     <IonPage>
-      <AppHeader />
-
+       <AppHeader showBack backHref="/home" />
       <IonContent fullscreen className="hm-content hm-camo">
         <div className="hm-hero hm-camo" style={{ paddingBottom: 18 }}>
           <div className="hm-wrap hm-hero-inner">
@@ -72,7 +69,6 @@ const Login: React.FC = () => {
               <IonInput
                 value={email}
                 type="email"
-                inputMode="email"
                 placeholder="you@email.com"
                 onIonInput={(e) => setEmail(e.detail.value ?? "")}
               />
@@ -118,7 +114,12 @@ const Login: React.FC = () => {
           <div style={{ height: 28 }} />
         </div>
 
-        <IonToast isOpen={!!toast} message={toast ?? ""} duration={1600} onDidDismiss={() => setToast(null)} />
+        <IonToast
+          isOpen={!!toast}
+          message={toast ?? ""}
+          duration={1600}
+          onDidDismiss={() => setToast(null)}
+        />
       </IonContent>
     </IonPage>
   );

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "198131136963",
+    "project_id": "huntmarket-8d631",
+    "storage_bucket": "huntmarket-8d631.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:198131136963:android:45a2337b4cc24cd95ea576",
+        "android_client_info": {
+          "package_name": "com.yourapp.hunt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9v6-S4xauNs8TyP6yUiz88RtAR7ZCiVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
