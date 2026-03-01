@@ -1,3 +1,22 @@
+// src/data/products.ts
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  type QueryConstraint,
+  type Unsubscribe,
+  deleteField,
+} from "firebase/firestore";
+import { db } from "../firebase";
+
 export type Product = {
   id: string;
   name: string;
@@ -5,213 +24,111 @@ export type Product = {
   images: string[];
   categoryId: string;
   storeId: string;
-  storeName: string;
   description: string;
   inStock?: boolean;
   sizes?: string[];
+  createdAt?: any;
+  updatedAt?: any;
 };
 
-export const PRODUCTS: Product[] = [
-  {
-    id: "p1",
-    name: "Camo Jacket Pro",
-    price: 45,
-    images: [
-      "https://images.unsplash.com/photo-1520975958225-1c2e3f1a8d8a?auto=format&fit=crop&w=1600&q=60",
-      "https://images.unsplash.com/photo-1520975900308-9f7f3da8bd65?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "clothing",
-    storeId: "s1",
-    storeName: "Falcon Hunt Store",
-    description:
-      "Lightweight camo jacket built for early mornings. Wind resistant, quiet fabric, and deep pockets for shells and calls.",
-    inStock: true,
-    sizes: ["S", "M", "L", "XL"],
-  },
+export type ProductCreate = Omit<Product, "id" | "createdAt" | "updatedAt">;
 
-  {
-    id: "p1b",
-    name: "Thermal Base Layer",
-    price: 22,
-    images: [
-      "https://images.unsplash.com/photo-1520975900308-9f7f3da8bd65?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "clothing",
-    storeId: "s1",
-    storeName: "Falcon Hunt Store",
-    description: "Warm base layer for cold mornings. Breathable and lightweight.",
-    inStock: true,
-    sizes: ["S", "M", "L", "XL"],
-  },
+function assertProductInput(input: ProductCreate) {
+  if (!input?.name) throw new Error("Product name is required");
+  if (typeof input.price !== "number" || Number.isNaN(input.price)) throw new Error("Product price must be a number");
+  if (!input.categoryId) throw new Error("categoryId is required");
+  if (!input.storeId) throw new Error("storeId is required");
+  if (!Array.isArray(input.images) || input.images.length === 0) throw new Error("images[] is required (at least 1)");
+  if (!input.description) throw new Error("description is required");
+}
 
-  {
-    id: "p2",
-    name: "Hiking Boots X",
-    price: 60,
-    images: [
-      "https://images.unsplash.com/photo-1528701800489-20be3c6a2c1e?auto=format&fit=crop&w=1600&q=60",
-      "https://images.unsplash.com/photo-1528701800619-8a8d83515a69?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "shoes",
-    storeId: "s2",
-    storeName: "Mountain Gear",
-    description: "Rugged boots with strong grip and waterproof lining.",
-    inStock: true,
-    sizes: ["40", "41", "42", "43", "44", "45"],
-  },
+/** Create or update product by a specific ID (best for bulk import). Keeps createdAt if doc exists. */
+export async function upsertProductWithId(id: string, input: ProductCreate) {
+  if (!id) throw new Error("Product id is required");
+  assertProductInput(input);
 
-  {
-    id: "p2b",
-    name: "Trail Boots Storm",
-    price: 74,
-    images: [
-      "https://images.unsplash.com/photo-1528701800619-8a8d83515a69?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "shoes",
-    storeId: "s2",
-    storeName: "Mountain Gear",
-    description: "Storm-ready boots with extra ankle support and aggressive tread.",
-    inStock: true,
-    sizes: ["40", "41", "42", "43", "44", "45"],
-  },
+  const ref = doc(db, "products", id);
+  const snap = await getDoc(ref);
 
-  {
-    id: "p3",
-    name: "Binoculars 10x42",
-    price: 75,
-    images: [
-      "https://images.unsplash.com/photo-1516571748831-5d81767b788d?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "optics",
-    storeId: "s1",
-    storeName: "Falcon Hunt Store",
-    description: "Clear optics with strong low-light performance.",
-    inStock: true,
-  },
+  // ✅ build clean payload (no undefined)
+  const data: any = {
+    name: input.name,
+    price: input.price,
+    images: input.images,
+    categoryId: input.categoryId,
+    storeId: input.storeId,
+    description: input.description,
+    inStock: input.inStock ?? true,
+    createdAt: snap.exists() ? (snap.data() as any).createdAt : serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
 
-  {
-    id: "p3b",
-    name: "Rangefinder Compact",
-    price: 95,
-    images: [
-      "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "optics",
-    storeId: "s3",
-    storeName: "Beqaa Outdoors",
-    description: "Compact rangefinder with fast lock-on distance readout.",
-    inStock: true,
-  },
+  // ✅ only include sizes if present & not empty
+  if (Array.isArray(input.sizes) && input.sizes.length > 0) {
+    data.sizes = input.sizes;
+  }
 
-  {
-    id: "p4",
-    name: "Camping Lantern",
-    price: 18,
-    images: [
-      "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "camping",
-    storeId: "s2",
-    storeName: "Mountain Gear",
-    description: "Bright lantern with long battery life. Great for camp sites.",
-    inStock: true,
-  },
+  await setDoc(ref, data, { merge: true });
+  return id;
+}
 
-  {
-    id: "p4b",
-    name: "Compact Stove Kit",
-    price: 28,
-    images: [
-      "https://images.unsplash.com/photo-1523413651479-597eb2da0ad6?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "camping",
-    storeId: "s2",
-    storeName: "Mountain Gear",
-    description: "Compact stove kit for quick meals in the outdoors.",
-    inStock: true,
-  },
+/** Update product fields (patch). Does not force required fields. */
+export async function updateProduct(productId: string, patch: Partial<ProductCreate>) {
+  if (!productId) throw new Error("productId is required");
 
-  {
-    id: "p5",
-    name: "Duck Call Classic",
-    price: 12,
-    images: [
-      "https://images.unsplash.com/photo-1520975767771-4c26a8b9f0d9?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "calls",
-    storeId: "s3",
-    storeName: "Beqaa Outdoors",
-    description: "Classic duck call with easy blow and realistic tone.",
-    inStock: true,
-  },
+  if (patch.price !== undefined) {
+    if (typeof patch.price !== "number" || Number.isNaN(patch.price)) throw new Error("price must be a number");
+  }
+  if (patch.images !== undefined) {
+    if (!Array.isArray(patch.images) || patch.images.length === 0) throw new Error("images[] must have at least 1 image");
+  }
 
-  {
-    id: "p5b",
-    name: "Quail Call",
-    price: 9,
-    images: [
-      "https://images.unsplash.com/photo-1520975903662-2b4b1cd5df2a?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "calls",
-    storeId: "s3",
-    storeName: "Beqaa Outdoors",
-    description: "Compact quail call with sharp, clear notes.",
-    inStock: true,
-  },
+  const next: any = { ...patch, updatedAt: serverTimestamp() };
 
-  {
-    id: "p6",
-    name: "12ga Shells Box",
-    price: 20,
-    images: [
-      "https://images.unsplash.com/photo-1604617677229-96d65e6a85ee?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "ammo",
-    storeId: "s1",
-    storeName: "Falcon Hunt Store",
-    description: "12 gauge shells box. Reserve in-app, pay in store (18+).",
-    inStock: true,
-  },
+  // ✅ handle sizes safely:
+  // - if patch.sizes is undefined => don't touch sizes
+  // - if patch.sizes is [] => delete sizes field
+  // - if patch.sizes has values => set it
+  if (patch.sizes !== undefined) {
+    if (Array.isArray(patch.sizes) && patch.sizes.length > 0) next.sizes = patch.sizes;
+    else next.sizes = deleteField();
+  }
 
-  {
-    id: "p6b",
-    name: "20ga Shells Box",
-    price: 19,
-    images: [
-      "https://images.unsplash.com/photo-1604617677963-d4ad8e0f2f25?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "ammo",
-    storeId: "s1",
-    storeName: "Falcon Hunt Store",
-    description: "20 gauge shells box. Reserve in-app, pay in store (18+).",
-    inStock: true,
-  },
+  await updateDoc(doc(db, "products", productId), next);
+}
 
-  {
-    id: "p7",
-    name: "Over/Under Shotgun",
-    price: 900,
-    images: [
-      "https://images.unsplash.com/photo-1609851451256-7f9e3b1a4d74?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "shotguns",
-    storeId: "s3",
-    storeName: "Beqaa Outdoors",
-    description: "In-store purchase only (18+).",
-    inStock: true,
-  },
+/** Delete product. */
+export async function deleteProduct(productId: string) {
+  if (!productId) throw new Error("productId is required");
+  await deleteDoc(doc(db, "products", productId));
+}
 
-  {
-    id: "p7b",
-    name: "Semi-Auto Shotgun",
-    price: 980,
-    images: [
-      "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=1600&q=60",
-    ],
-    categoryId: "shotguns",
-    storeId: "s3",
-    storeName: "Beqaa Outdoors",
-    description: "In-store purchase only (18+).",
-    inStock: true,
-  },
-];
+/** Get one product. */
+export async function getProduct(productId: string): Promise<Product | null> {
+  if (!productId) return null;
+  const snap = await getDoc(doc(db, "products", productId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as Omit<Product, "id">) };
+}
+
+/** Live subscribe to products list with optional filters. */
+export function subscribeProducts(
+  cb: (products: Product[]) => void,
+  opts?: { storeId?: string; categoryId?: string }
+): Unsubscribe {
+  const constraints: QueryConstraint[] = [orderBy("name", "asc")];
+
+  if (opts?.storeId) constraints.unshift(where("storeId", "==", opts.storeId));
+  if (opts?.categoryId) constraints.unshift(where("categoryId", "==", opts.categoryId));
+
+  const qy = query(collection(db, "products"), ...constraints);
+
+  return onSnapshot(qy, (snap) => {
+    cb(
+      snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<Product, "id">),
+      }))
+    );
+  });
+}

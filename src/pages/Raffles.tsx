@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { IonContent, IonPage, IonToast } from "@ionic/react";
 import { useHistory } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
-import { collection, doc, getDoc, onSnapshot, orderBy, query } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { db } from "../firebase";
+import { useIsAdmin } from "../lib/admin";
 
 type Raffle = {
   id: string;
@@ -16,41 +17,26 @@ type Raffle = {
   winnerName?: string;
 };
 
-async function isAdminUid(uid: string) {
-  const snap = await getDoc(doc(db, "settings", "admin"));
-  const uids = (snap.data()?.uids || []) as string[];
-  return uids.includes(uid);
-}
-
 const Raffles: React.FC = () => {
   const history = useHistory();
   const [toast, setToast] = useState<string>("");
 
   const [raffles, setRaffles] = useState<Raffle[]>([]);
-  const [amIAdmin, setAmIAdmin] = useState<boolean>(false);
-
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (u) => {
-      if (!u) {
-        setAmIAdmin(false);
-        return;
-      }
-      try {
-        setAmIAdmin(await isAdminUid(u.uid));
-      } catch {
-        setAmIAdmin(false);
-      }
-    });
-
-    return () => unsub();
-  }, []);
+  const { loading: adminLoading, isAdmin } = useIsAdmin();
 
   useEffect(() => {
     const qy = query(collection(db, "raffles"), orderBy("createdAt", "desc"));
-    return onSnapshot(qy, (snap) => {
-      const list: Raffle[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      setRaffles(list);
-    });
+    return onSnapshot(
+      qy,
+      (snap) => {
+        const list: Raffle[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        setRaffles(list);
+      },
+      (err) => {
+        console.error("raffles snapshot error:", err);
+        setToast(err?.message || "Could not load raffles.");
+      }
+    );
   }, []);
 
   return (
@@ -62,12 +48,10 @@ const Raffles: React.FC = () => {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontWeight: 1100, fontSize: 20 }}>Raffles</div>
-                <div style={{ opacity: 0.75, marginTop: 4 }}>
-                  Reserve a number. When sold out, winner is drawn.
-                </div>
+                <div style={{ opacity: 0.75, marginTop: 4 }}>Reserve a number. When sold out, winner is drawn.</div>
               </div>
 
-              {amIAdmin ? (
+              {!adminLoading && isAdmin ? (
                 <button className="pd-primary" type="button" onClick={() => history.push("/admin")}>
                   Admin Dashboard
                 </button>
@@ -107,8 +91,8 @@ const Raffles: React.FC = () => {
                           ) : null}
                         </div>
 
-                        {/* ✅ optional Manage button for admin */}
-                        {amIAdmin ? (
+                        {/* optional Manage button for admin */}
+                        {!adminLoading && isAdmin ? (
                           <button
                             className="pd-secondary"
                             type="button"

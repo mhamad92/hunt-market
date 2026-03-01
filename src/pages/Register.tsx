@@ -15,6 +15,7 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "../firebase";
 
 const PROFILE_KEY = "hm_profile";
+const PROFILE_EVENT = "hm_profile_updated";
 
 const digitsOnly = (v: string) => (v ?? "").replace(/\D/g, "");
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -57,11 +58,14 @@ const Register: React.FC = () => {
       // set display name in Firebase Auth
       await updateProfile(res.user, { displayName: fullName });
 
-      // keep your existing "fast checkout" local profile
+      // save local profile for fast checkout
       localStorage.setItem(
         PROFILE_KEY,
         JSON.stringify({ fullName, phone: phoneDigits, email: emailTrim })
       );
+
+      // 🔥 notify Profile page to reload instantly
+      window.dispatchEvent(new Event(PROFILE_EVENT));
 
       const backTo = (location.state as any)?.from ?? "/profile";
       history.replace(backTo);
@@ -72,7 +76,7 @@ const Register: React.FC = () => {
 
   return (
     <IonPage>
-       <AppHeader showBack backHref="/home" />
+      <AppHeader showBack backHref="/home" />
 
       <IonContent fullscreen className="hm-content hm-camo">
         <div className="hm-hero hm-camo" style={{ paddingBottom: 18 }}>

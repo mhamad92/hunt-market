@@ -1,12 +1,25 @@
 import React, { useMemo, useState } from "react";
-import { IonContent, IonPage, IonHeader, IonToolbar, IonSearchbar, IonSelect, IonSelectOption, IonAlert } from "@ionic/react";
+import {
+  IonContent,
+  IonPage,
+  IonHeader,
+  IonToolbar,
+  IonSearchbar,
+  IonSelect,
+  IonSelectOption,
+  IonAlert,
+} from "@ionic/react";
 import { useHistory, useParams } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
-import { PRODUCTS } from "../data/products";
+
+import { useCategories } from "../hooks/useCategories";
+import { useProducts } from "../hooks/useProducts"; // ✅ use this
 
 type RouteParams = { categoryId: string };
 
-const isRestrictedCategory = (categoryId: string) => categoryId === "ammo" || categoryId === "shotguns";
+const isRestrictedCategory = (categoryId: string) =>
+  categoryId === "ammo" || categoryId === "shotguns";
+
 const is18Ok = () => sessionStorage.getItem("hm_18_ok") === "1";
 
 const FALLBACK_IMG =
@@ -16,6 +29,15 @@ const CategoryPage: React.FC = () => {
   const history = useHistory();
   const { categoryId } = useParams<RouteParams>();
 
+  const { categories } = useCategories();
+  const category = useMemo(
+    () => categories.find((c) => c.id === categoryId),
+    [categories, categoryId]
+  );
+
+  // ✅ get products filtered by categoryId
+  const { loading, products } = useProducts({ categoryId });
+
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"featured" | "price_low" | "price_high" | "name">("featured");
   const [onlyAvailable, setOnlyAvailable] = useState(false);
@@ -24,16 +46,14 @@ const CategoryPage: React.FC = () => {
   const [show18Alert, setShow18Alert] = useState(false);
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
 
-  const categoryProducts = useMemo(() => {
-    return PRODUCTS.filter((p) => p.categoryId === categoryId);
-  }, [categoryId]);
-
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    let list = [...categoryProducts];
+    let list = [...products];
 
     if (term) {
-      list = list.filter((p) => `${p.name} ${p.description ?? ""}`.toLowerCase().includes(term));
+      list = list.filter((p) =>
+        `${p.name} ${p.description ?? ""}`.toLowerCase().includes(term)
+      );
     }
 
     if (onlyAvailable) {
@@ -55,7 +75,7 @@ const CategoryPage: React.FC = () => {
     }
 
     return list;
-  }, [categoryProducts, q, sort, onlyAvailable]);
+  }, [products, q, sort, onlyAvailable]);
 
   const openProduct = (productId: string) => history.push(`/product/${productId}`);
 
@@ -68,27 +88,18 @@ const CategoryPage: React.FC = () => {
     openProduct(productId);
   };
 
-  const categoryTitle = useMemo(() => {
-    const map: Record<string, string> = {
-      clothing: "Clothing",
-      shoes: "Shoes",
-      optics: "Optics",
-      camping: "Camping",
-      calls: "Calls",
-      ammo: "Ammunition",
-      shotguns: "Shotguns",
-    };
-    return map[categoryId] || categoryId;
-  }, [categoryId]);
+  const categoryTitle = category?.name || categoryId;
 
   return (
     <IonPage>
       <AppHeader showBack backHref="/home" />
 
-      {/* Sticky search + controls */}
       <IonHeader translucent>
         <IonToolbar className="hm-toolbar">
-          <div className="hm-wrap" style={{ padding: "8px 18px", display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div
+            className="hm-wrap"
+            style={{ padding: "8px 18px", display: "flex", gap: 10, flexWrap: "wrap" }}
+          >
             <IonSearchbar
               className="hm-search"
               value={q}
@@ -133,6 +144,12 @@ const CategoryPage: React.FC = () => {
             </div>
           )}
 
+          {loading && (
+            <div className="stores-empty" style={{ marginTop: 12 }}>
+              Loading…
+            </div>
+          )}
+
           <div className="hm-grid" style={{ marginTop: 14 }}>
             {filtered.map((p) => (
               <div
@@ -144,7 +161,7 @@ const CategoryPage: React.FC = () => {
                 <div className="hm-product-img">
                   <img
                     className="hm-product-img-el"
-                    src={p.images?.[0] || ""}
+                    src={p.images?.[0] || FALLBACK_IMG}
                     alt={p.name}
                     loading="lazy"
                     onError={(e) => {
@@ -157,10 +174,13 @@ const CategoryPage: React.FC = () => {
                 <div className="hm-product-body">
                   <p className="hm-product-name">{p.name}</p>
 
-                  <div className="sd-bottom" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div
+                    className="sd-bottom"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                  >
                     <div className="hm-product-price">${p.price}</div>
 
-                    {(p.categoryId === "ammo" || p.categoryId === "shotguns") && (
+                    {isRestrictedCategory(p.categoryId) && (
                       <span className="sd-pill warn">18+</span>
                     )}
                   </div>
@@ -171,14 +191,13 @@ const CategoryPage: React.FC = () => {
             ))}
           </div>
 
-          {!filtered.length && (
+          {!filtered.length && !loading && (
             <div className="stores-empty" style={{ marginTop: 14 }}>
               No items match “{q.trim()}”
             </div>
           )}
         </div>
 
-        {/* 18+ gate */}
         <IonAlert
           isOpen={show18Alert}
           header="Adults only (18+)"

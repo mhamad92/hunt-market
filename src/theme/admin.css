@@ -1,0 +1,72 @@
+/* ===== Admin pages (dark background + readable Ionic fields) ===== */
+
+.admin-page {
+  --background: #070a08;
+  background: var(--background) !important;
+}
+
+/* Cards */
+.admin-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.admin-card {
+  background: rgba(15, 18, 16, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Buttons */
+.admin-btn {
+  border: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 900;
+  background: #111;
+  color: #fff;
+}
+
+/* Make labels visible on dark background */
+.admin-page ion-label,
+.admin-page .admin-label {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Wrapper you use around inputs (white shell) */
+.admin-field-shell {
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+/* Inputs/selects/searchbar readable on white shell */
+.admin-page ion-input,
+.admin-page ion-textarea,
+.admin-page ion-select,
+.admin-page ion-searchbar {
+  --color: #111;
+  --placeholder-color: rgba(0, 0, 0, 0.45);
+  --icon-color: rgba(0, 0, 0, 0.55);
+}
+
+/* Select placeholder specifically */
+.admin-page ion-select::part(placeholder) {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* Fix Ionic "highlight" line color (optional) */
+.admin-page ion-input,
+.admin-page ion-textarea {
+  --highlight-color-focused: #111;
+}
+
+/* Small helper text */
+.admin-help {
+  color: rgba(255, 255, 255, 0.70);
+  font-size: 12px;
+}

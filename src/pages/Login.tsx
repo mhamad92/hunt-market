@@ -14,6 +14,18 @@ import AppHeader from "../components/AppHeader";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
 
+const PROFILE_KEY = "hm_profile";
+const PROFILE_EVENT = "hm_profile_updated";
+
+function readProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? (JSON.parse(raw) as any) : {};
+  } catch {
+    return {};
+  }
+}
+
 const Login: React.FC = () => {
   const history = useHistory();
   const location = useLocation<{ from?: string }>();
@@ -29,11 +41,23 @@ const Login: React.FC = () => {
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      // ✅ merge firebase -> local profile (keep phone)
+      const u = auth.currentUser;
+      if (u) {
+        const cur = readProfile();
+        const merged = {
+          fullName: cur.fullName || u.displayName || "",
+          phone: cur.phone || "",
+          email: cur.email || u.email || email.trim(),
+        };
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new Event(PROFILE_EVENT));
+      }
 
       const backTo = (location.state as any)?.from ?? "/home";
       history.replace(backTo);
-
     } catch (e: any) {
       setToast(e?.message || "Login failed.");
     }
@@ -41,7 +65,7 @@ const Login: React.FC = () => {
 
   return (
     <IonPage>
-       <AppHeader showBack backHref="/home" />
+      <AppHeader showBack backHref="/home" />
       <IonContent fullscreen className="hm-content hm-camo">
         <div className="hm-hero hm-camo" style={{ paddingBottom: 18 }}>
           <div className="hm-wrap hm-hero-inner">
@@ -59,9 +83,7 @@ const Login: React.FC = () => {
           <div className="hm-auth-card">
             <IonText>
               <h2 style={{ marginTop: 0, marginBottom: 6, fontWeight: 1100 }}>Welcome back</h2>
-              <p style={{ marginTop: 0, opacity: 0.75, fontWeight: 850 }}>
-                Sign in to continue.
-              </p>
+              <p style={{ marginTop: 0, opacity: 0.75, fontWeight: 850 }}>Sign in to continue.</p>
             </IonText>
 
             <IonItem lines="none" className="hm-field">
@@ -114,12 +136,7 @@ const Login: React.FC = () => {
           <div style={{ height: 28 }} />
         </div>
 
-        <IonToast
-          isOpen={!!toast}
-          message={toast ?? ""}
-          duration={1600}
-          onDidDismiss={() => setToast(null)}
-        />
+        <IonToast isOpen={!!toast} message={toast ?? ""} duration={1600} onDidDismiss={() => setToast(null)} />
       </IonContent>
     </IonPage>
   );

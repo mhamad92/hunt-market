@@ -17,6 +17,10 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminRaffle from "./pages/AdminRaffle";
 import { setupPushNotifications } from "./push";
 import { auth } from "./firebase";
+import AdminImport from "./pages/AdminImport";
+import AdminProducts from "./pages/AdminProducts";
+import AdminMarket from "./pages/AdminMarket";
+import "./theme/admin.css";
 
 
 
@@ -37,6 +41,10 @@ import Category from "./pages/Category";
 import ProductDetails from "./pages/ProductDetails";
 import StoreDetails from "./pages/StoreDetails";
 import RentalDetails from "./pages/RentalDetails";
+import AdminLayout from "./pages/AdminLayout";
+import AdminStores from "./pages/AdminStores";
+import AdminCategories from "./pages/AdminCategories";
+
 
 /* Raffles */
 import Raffles from "./pages/Raffles";
@@ -55,6 +63,7 @@ import "@ionic/react/css/text-alignment.css";
 import "@ionic/react/css/text-transformation.css";
 import "@ionic/react/css/flex-utils.css";
 import "@ionic/react/css/display.css";
+
 
 
 
@@ -95,8 +104,17 @@ const App: React.FC = () => {
           <Route exact path="/product/:productId" component={ProductDetails} />
           <Route exact path="/store/:storeId" component={StoreDetails} />
           <Route exact path="/rental/:rentalId" component={RentalDetails} />
+          <Route path="/admin" component={AdminLayout} />
+          <Route exact path="/admin/import" component={AdminImport} />
+          <Route exact path="/admin/products" component={AdminProducts} />
+          <Route exact path="/admin/market" component={AdminMarket} />
           <Route exact path="/admin" component={AdminDashboard} />
+          <Route exact path="/admin/stores" component={AdminStores} />
+          <Route exact path="/admin/categories" component={AdminCategories} />
           <Route exact path="/admin/raffles/:raffleId" component={AdminRaffle} />
+
+
+
 
           {/* Raffles (stack, not a tab) */}
           <Route exact path="/raffles" component={Raffles} />

@@ -1,5 +1,15 @@
-import React, { useEffect, useState } from "react";
-import { IonContent, IonPage, IonToast } from "@ionic/react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  IonContent,
+  IonPage,
+  IonToast,
+  IonModal,
+  IonHeader,
+  IonToolbar,
+  IonTitle,
+  IonButton,
+  IonDatetime,
+} from "@ionic/react";
 import { useHistory } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import { auth, db, functions } from "../firebase";
@@ -14,20 +24,27 @@ type Raffle = {
   pricePerNumber: number;
   totalNumbers: number;
   status: "open" | "sold_out" | "drawn";
+  drawAt?: number | null;
 };
 
 async function isAdminClient(uid: string) {
-  const snap = await getDoc(doc(db, "settings", "admin"));
-  const uids = (snap.data()?.uids || []) as string[];
-  return uids.includes(uid);
+  const snap = await getDoc(doc(db, "admins", uid));
+  return snap.exists() && snap.data()?.enabled === true;
 }
 
 const AdminDashboard: React.FC = () => {
   const history = useHistory();
+
   const [toast, setToast] = useState("");
   const [raffles, setRaffles] = useState<Raffle[]>([]);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [deletingId, setDeletingId] = useState<string>("");
+
+  // ✅ Schedule modal (Option A)
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickedISO, setPickedISO] = useState<string>("");
+  const [pickedRaffle, setPickedRaffle] = useState<Raffle | null>(null);
+  const [broadcastBusy, setBroadcastBusy] = useState(false);
 
   // ✅ single auth listener
   useEffect(() => {
@@ -40,11 +57,19 @@ const AdminDashboard: React.FC = () => {
         const ok = await isAdminClient(u.uid);
         setAllowed(ok);
         if (!ok) setToast("Not authorized.");
-      } catch {
-        setAllowed(false);
-        setToast("Could not verify admin.");
-      }
+      } catch (e: any) {
+  console.error("Admin verify error:", e);
+  setAllowed(false);
+  setToast(e?.message || "Could not verify admin.");
+}
+
+      const unsub = onAuthStateChanged(auth, async (u) => {
+  console.log("ADMIN CHECK user:", u?.uid, u?.email); // ✅ add this line
+  
+});
     });
+
+    
 
     return () => unsub();
   }, []);
@@ -97,6 +122,38 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // ✅ Open modal
+  const openSchedule = (r: Raffle) => {
+    setPickedRaffle(r);
+    // default = 2 hours from now
+    const d = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    setPickedISO(d.toISOString());
+    setShowPicker(true);
+  };
+
+  // ✅ Broadcast (calls your scheduleDrawTime)
+  const broadcastDrawTime = async () => {
+    if (!pickedRaffle) return setToast("Pick a raffle first.");
+    if (!pickedISO) return setToast("Pick date and time.");
+
+    const drawAtMs = new Date(pickedISO).getTime();
+    if (!Number.isFinite(drawAtMs)) return setToast("Invalid date/time.");
+
+    setBroadcastBusy(true);
+    try {
+      const fn = httpsCallable(functions, "scheduleDrawTime");
+      await fn({ raffleId: pickedRaffle.id, drawAtMs });
+
+      setToast("Broadcast sent ✅");
+      setShowPicker(false);
+      setPickedRaffle(null);
+    } catch (e: any) {
+      setToast(e?.message || "Broadcast failed.");
+    } finally {
+      setBroadcastBusy(false);
+    }
+  };
+
   if (allowed === null) return null;
 
   if (!allowed) {
@@ -113,6 +170,8 @@ const AdminDashboard: React.FC = () => {
               </button>
             </div>
           </div>
+
+          
 
           <IonToast isOpen={!!toast} message={toast} duration={1800} onDidDismiss={() => setToast("")} />
         </IonContent>
@@ -156,23 +215,39 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ display: "grid", gap: 10, justifyItems: "end" }}>
                         <div style={{ fontWeight: 1000, opacity: 0.9 }}>
                           {r.status === "open" ? "OPEN" : r.status === "sold_out" ? "SOLD OUT" : "DRAWN"}
                         </div>
 
-                        {/* ✅ delete per raffle */}
-                        <button
-                          className="pd-secondary"
-                          type="button"
-                          disabled={deletingId === r.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteRaffleClient(r.id);
-                          }}
-                        >
-                          {deletingId === r.id ? "Deleting..." : "🗑 Delete"}
-                        </button>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          {/* ✅ schedule draw only when sold_out */}
+                          {r.status === "sold_out" ? (
+                            <button
+                              className="pd-primary"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openSchedule(r);
+                              }}
+                            >
+                              📅 Schedule draw
+                            </button>
+                          ) : null}
+
+                          {/* ✅ delete per raffle */}
+                          <button
+                            className="pd-secondary"
+                            type="button"
+                            disabled={deletingId === r.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteRaffleClient(r.id);
+                            }}
+                          >
+                            {deletingId === r.id ? "Deleting..." : "🗑 Delete"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -181,6 +256,54 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* ✅ Option A modal */}
+        <IonModal isOpen={showPicker} onDidDismiss={() => setShowPicker(false)}>
+          <IonHeader>
+            <IonToolbar>
+              <IonTitle>Schedule draw</IonTitle>
+              <IonButton slot="end" onClick={() => setShowPicker(false)}>
+                Close
+              </IonButton>
+            </IonToolbar>
+          </IonHeader>
+
+          <IonContent className="ion-padding">
+            <div style={{ fontWeight: 1000, marginBottom: 8 }}>
+              {pickedRaffle ? pickedRaffle.title : "Raffle"}
+            </div>
+
+            <div style={{ opacity: 0.75, marginBottom: 10 }}>
+              Pick the date & time. This will broadcast to all reserved users.
+            </div>
+
+            <IonDatetime
+  presentation="date-time"
+  value={pickedISO || new Date().toISOString()}
+  onIonChange={(e) => setPickedISO(String(e.detail.value || ""))}
+  minuteValues="0,5,10,15,20,25,30,35,40,45,50,55"
+/>
+
+<div style={{ marginTop: 10, opacity: 0.8, fontSize: 13 }}>
+  Selected: <strong>{pickedISO ? new Date(pickedISO).toLocaleString() : "—"}</strong>
+</div>
+
+            <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                className="pd-primary"
+                type="button"
+                disabled={broadcastBusy}
+                onClick={broadcastDrawTime}
+              >
+                {broadcastBusy ? "Sending..." : "📣 Broadcast to participants"}
+              </button>
+
+              <button className="pd-secondary" type="button" onClick={() => setShowPicker(false)}>
+                Cancel
+              </button>
+            </div>
+          </IonContent>
+        </IonModal>
 
         <IonToast isOpen={!!toast} message={toast} duration={1800} onDidDismiss={() => setToast("")} />
       </IonContent>

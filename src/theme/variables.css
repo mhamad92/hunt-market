@@ -2634,3 +2634,129 @@ ion-text * {
   from{ transform: scale(0.98); opacity: 0.85; }
   to{ transform: scale(1.04); opacity: 1; }
 }
+
+
+.raffle-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+}
+
+/* Mobile: always 5 per row */
+@media (max-width: 480px) {
+  .raffle-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+/* ===== ADMIN DASHBOARD THEME ===== */
+
+.admin-page {
+  --background: #f4f6f9;
+  background: #f4f6f9;
+  color: #111;
+}
+
+.admin-container {
+  padding: 18px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-topbar {
+  --background: #ffffff;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.admin-title {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  color: #111;
+}
+
+.admin-sidebar {
+  --background: #0f172a; /* dark navy */
+  color: #fff;
+}
+
+.admin-sidebar ion-item {
+  --background: transparent;
+  --color: rgba(255,255,255,0.92);
+  --color-hover: #fff;
+  margin: 6px 10px;
+  border-radius: 10px;
+}
+
+.admin-sidebar ion-item:hover {
+  --background: rgba(255,255,255,0.08);
+}
+
+.admin-card {
+  background: #fff;
+  color: #111;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.admin-btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  background: #111;
+  color: #fff;
+}
+
+.admin-btn.ghost {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: #fff;
+}
+
+.admin-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: #fff;
+  color: #111;
+}
+
+/* Admin layout */
+.admin-page {
+  --background: #0e0f12;
+  background: #0e0f12;
+  color: #fff;
+}
+
+.admin-container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.admin-card {
+  background: #14161a;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+
+.admin-btn {
+  background: #fff;
+  color: #111;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.admin-btn:hover {
+  opacity: 0.92;
+}

@@ -10,6 +10,7 @@ import {
   updatePassword,
   signOut,
 } from "firebase/auth";
+import { useIsAdmin } from "../lib/admin";
 
 type ProfileData = {
   fullName: string;
@@ -71,6 +72,8 @@ function writeAddresses(list: Address[]) {
 const Profile: React.FC = () => {
   const history = useHistory();
   const [toast, setToast] = useState<string>("");
+
+  const { loading: adminLoading, isAdmin } = useIsAdmin();
 
   // ✅ Firebase login state (replaces hm_logged_in)
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(!!auth.currentUser);
@@ -137,6 +140,16 @@ const Profile: React.FC = () => {
     setProfile(readProfile());
     setAddresses(readAddresses());
   }, [isLoggedIn]);
+
+
+  useEffect(() => {
+  const onUpdate = () => {
+    setProfile(readProfile());
+    setAddresses(readAddresses());
+  };
+  window.addEventListener("hm_profile_updated", onUpdate as EventListener);
+  return () => window.removeEventListener("hm_profile_updated", onUpdate as EventListener);
+}, []);
 
   useEffect(() => {
     if (!editing) return;
@@ -315,13 +328,24 @@ const Profile: React.FC = () => {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontWeight: 1100, fontSize: 20 }}>Your Profile</div>
-                    <div style={{ opacity: 0.75, marginTop: 4 }}>Saved locally for faster checkout.</div>
+                    <div style={{ opacity: 0.75, marginTop: 4 }}></div>
                   </div>
 
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     <button className="pd-secondary" onClick={() => history.push("/home")} type="button">
                       Continue shopping
                     </button>
+
+                      {!adminLoading && isAdmin && (
+  <button
+    className="pd-secondary"
+    onClick={() => history.push("/admin/market")}
+    type="button"
+  >
+    Marketplace Admin
+  </button>
+)}
+
                     <button className="pd-secondary" onClick={logout} type="button">
                       Log out
                     </button>
@@ -357,7 +381,7 @@ const Profile: React.FC = () => {
                           className="profile-input"
                           value={profileDraft.fullName}
                           onChange={(e) => setProfileDraft((p) => ({ ...p, fullName: e.target.value }))}
-                          placeholder="Mohamad Houmani"
+                          placeholder="Edit Name"
                         />
                       </div>
 
@@ -369,13 +393,13 @@ const Profile: React.FC = () => {
                           onChange={(e) =>
                             setProfileDraft((p) => ({ ...p, phone: (e.target.value ?? "").replace(/\D/g, "") }))
                           }
-                          placeholder="70971299"
+                          placeholder="Edit Number"
                           inputMode="numeric"
                         />
                       </div>
 
                       <div className="profile-field">
-                        <div className="profile-label">Email (optional)</div>
+                        <div className="profile-label">Email</div>
                         <input
                           className="profile-input"
                           value={profileDraft.email}
@@ -582,7 +606,7 @@ const Profile: React.FC = () => {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontWeight: 1100, fontSize: 20 }}>Security</div>
-                    <div style={{ opacity: 0.75, marginTop: 4 }}>Change your Firebase password.</div>
+                    <div style={{ opacity: 0.75, marginTop: 4 }}></div>
                   </div>
 
                   <button

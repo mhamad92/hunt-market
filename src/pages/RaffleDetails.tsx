@@ -61,9 +61,10 @@ const RaffleDetails: React.FC = () => {
   const percent = total > 0 ? Math.round((soldCount / total) * 100) : 0;
 
   const numbers = useMemo(() => {
-    if (!total || total <= 0) return [];
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }, [total]);
+  const t = Number(raffle?.totalNumbers || 0);
+  if (!Number.isFinite(t) || t <= 0) return [];
+  return Array.from({ length: t }, (_, i) => i + 1);
+}, [raffle?.totalNumbers]);
 
   if (!raffle) return null;
 
@@ -175,14 +176,7 @@ const RaffleDetails: React.FC = () => {
             <p style={{ marginTop: 10 }}>Prize: {raffle.prize}</p>
 
             {/* Numbers grid */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(20, 1fr)",
-                gap: 12,
-                marginTop: 18,
-              }}
-            >
+            <div className="raffle-grid">
               {numbers.map((num) => {
   const reservedInfo = reserved[String(num)] || reserved[num];
   const pendingInfo = pendingNumbers[String(num)] || pendingNumbers[num];

@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { IonContent, IonPage, IonToast } from "@ionic/react";
 import { useHistory, useParams } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
-import { auth, db, functions } from "../firebase";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { db, functions } from "../firebase";
+import { doc, onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import confetti from "canvas-confetti";
+import { useIsAdmin } from "../lib/admin";
 
 type PendingItem = {
   id: string;
@@ -16,18 +17,12 @@ type PendingItem = {
   reference?: string;
 };
 
-async function isAdminUid(uid: string) {
-  const snap = await getDoc(doc(db, "settings", "admin"));
-  const uids = (snap.data()?.uids || []) as string[];
-  return uids.includes(uid);
-}
-
 const AdminRaffle: React.FC = () => {
   const { raffleId } = useParams<{ raffleId: string }>();
   const history = useHistory();
 
   const [toast, setToast] = useState("");
-  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const { loading: adminLoading, isAdmin } = useIsAdmin();
 
   const [raffle, setRaffle] = useState<any>(null);
   const [pending, setPending] = useState<PendingItem[]>([]);
@@ -38,28 +33,17 @@ const AdminRaffle: React.FC = () => {
   const [rollNumber, setRollNumber] = useState<number | null>(null);
   const [lastWinner, setLastWinner] = useState<{ number: number; name: string } | null>(null);
 
-  // admin gate
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (u) => {
-      if (!u) {
-        setAllowed(false);
-        return;
-      }
-      try {
-        setAllowed(await isAdminUid(u.uid));
-      } catch {
-        setAllowed(false);
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  // raffle live
+  // raffle live (public read)
   useEffect(() => {
     const ref = doc(db, "raffles", raffleId);
-    return onSnapshot(ref, (snap) => {
-      setRaffle(snap.exists() ? snap.data() : null);
-    });
+    return onSnapshot(
+      ref,
+      (snap) => setRaffle(snap.exists() ? snap.data() : null),
+      (err) => {
+        console.error("raffle snapshot error:", err);
+        setRaffle(null);
+      }
+    );
   }, [raffleId]);
 
   const reserved = raffle?.reserved || {};
@@ -84,9 +68,9 @@ const AdminRaffle: React.FC = () => {
   };
 
   useEffect(() => {
-    if (allowed) refreshPending();
+    if (isAdmin) refreshPending();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, raffleId]);
+  }, [isAdmin, raffleId]);
 
   // 🔊 + ✨ helpers
   const playWinSound = () => {
@@ -113,14 +97,14 @@ const AdminRaffle: React.FC = () => {
     const start = Date.now();
     const duration = 2000;
 
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       const elapsed = Date.now() - start;
       const t = Math.min(1, elapsed / duration);
 
       setRollNumber(Math.floor(Math.random() * total) + 1);
 
       if (t >= 1) {
-        clearInterval(interval);
+        window.clearInterval(interval);
         setRollNumber(finalNumber);
         setLastWinner({ number: finalNumber, name: finalName });
         playWinSound();
@@ -216,9 +200,10 @@ const AdminRaffle: React.FC = () => {
     await runSlotRoll(winnerNumber, winnerName);
   };
 
-  if (allowed === null) return null;
+  // ✅ wait for admin check
+  if (adminLoading) return null;
 
-  if (!allowed) {
+  if (!isAdmin) {
     return (
       <IonPage>
         <AppHeader />
@@ -311,7 +296,7 @@ const AdminRaffle: React.FC = () => {
               </div>
 
               <div style={{ marginTop: 6, opacity: 0.85 }}>
-                {rolling ? "Rolling..." : raffle.status === "drawn" ? (raffle.winnerName || "—") : "—"}
+                {rolling ? "Rolling..." : raffle.status === "drawn" ? raffle.winnerName || "—" : "—"}
               </div>
 
               <div style={{ marginTop: 12, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
@@ -340,115 +325,84 @@ const AdminRaffle: React.FC = () => {
               ) : null}
             </div>
 
-            {/* ✅ Numbers grid (shows Reserved + Pending) */}
-<div
-  style={{
-    display: "grid",
-    // ✅ 20 per row (admin)
-    gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
-    gap: 8,
-    marginTop: 16,
-  }}
->
-  {numbers.map((num) => {
-    const key = String(num);
+            {/* ✅ Numbers grid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
+                gap: 8,
+                marginTop: 16,
+              }}
+            >
+              {numbers.map((num) => {
+                const key = String(num);
 
-    const reservedInfo = reserved[key] || reserved[num];
-    const pendingInfo = pendingNumbers[key];
+                const reservedInfo = reserved[key] || reserved[num];
+                const pendingInfo = pendingNumbers[key];
 
-    const isReserved = !!reservedInfo;
-    const isPending = !!pendingInfo && pendingInfo.status === "pending";
+                const isReserved = !!reservedInfo;
+                const isPending = !!pendingInfo && pendingInfo.status === "pending";
 
-    const labelName = isReserved
-      ? (reservedInfo?.name || "—")
-      : isPending
-      ? (pendingInfo?.name || "—")
-      : "";
+                const labelName = isReserved ? reservedInfo?.name || "—" : isPending ? pendingInfo?.name || "—" : "";
 
-    const statusLabel = isReserved ? "Reserved" : isPending ? "Awaiting approval" : "Available";
+                const statusLabel = isReserved ? "Reserved" : isPending ? "Awaiting approval" : "Available";
 
-    return (
-      <div
-        key={num}
-        style={{
-          padding: 10,
-          borderRadius: 12,
-          textAlign: "center",
-          fontWeight: 900,
-          fontSize: 14,
-          lineHeight: 1.1,
-          background: isReserved
-            ? "linear-gradient(135deg,#555,#333)"
-            : isPending
-            ? "linear-gradient(135deg,#2b2b1a,#14140d)" // pending tint
-            : "linear-gradient(135deg,#1e1e1e,#111)",
-          border: isReserved
-            ? "2px solid #444"
-            : isPending
-            ? "2px solid #6b5f2a"
-            : "2px solid #222",
-          position: "relative",
-        }}
-        title={
-          isReserved
-            ? `Reserved by ${labelName}`
-            : isPending
-            ? `Awaiting approval: ${labelName}`
-            : "Available"
-        }
-      >
-        {/* number */}
-        <div style={{ fontWeight: 1000, fontSize: 14 }}>{num}</div>
+                return (
+                  <div
+                    key={num}
+                    style={{
+                      padding: 10,
+                      borderRadius: 12,
+                      textAlign: "center",
+                      fontWeight: 900,
+                      fontSize: 14,
+                      lineHeight: 1.1,
+                      background: isReserved
+                        ? "linear-gradient(135deg,#555,#333)"
+                        : isPending
+                        ? "linear-gradient(135deg,#2b2b1a,#14140d)"
+                        : "linear-gradient(135deg,#1e1e1e,#111)",
+                      border: isReserved ? "2px solid #444" : isPending ? "2px solid #6b5f2a" : "2px solid #222",
+                      position: "relative",
+                    }}
+                    title={
+                      isReserved ? `Reserved by ${labelName}` : isPending ? `Awaiting approval: ${labelName}` : "Available"
+                    }
+                  >
+                    <div style={{ fontWeight: 1000, fontSize: 14 }}>{num}</div>
 
-        {/* pending clock */}
-        {isPending ? (
-          <div
-            style={{
-              position: "absolute",
-              top: 6,
-              right: 6,
-              fontSize: 12,
-              opacity: 0.95,
-            }}
-            aria-label="Pending"
-            title="Awaiting approval"
-          >
-            🕒
-          </div>
-        ) : null}
+                    {isPending ? (
+                      <div
+                        style={{ position: "absolute", top: 6, right: 6, fontSize: 12, opacity: 0.95 }}
+                        aria-label="Pending"
+                        title="Awaiting approval"
+                      >
+                        🕒
+                      </div>
+                    ) : null}
 
-        {/* label line (full, no cut) */}
-        <div
-          style={{
-            marginTop: 6,
-            fontSize: 10,
-            fontWeight: 900,
-            opacity: 0.92,
-            whiteSpace: "normal",      // ✅ allow wrap
-            overflow: "visible",       // ✅ no cut
-            textOverflow: "clip",      // ✅ no ellipsis
-            wordBreak: "break-word",   // ✅ long names wrap
-          }}
-        >
-          {isReserved || isPending ? labelName : "—"}
-        </div>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 10,
+                        fontWeight: 900,
+                        opacity: 0.92,
+                        whiteSpace: "normal",
+                        overflow: "visible",
+                        textOverflow: "clip",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {isReserved || isPending ? labelName : "—"}
+                    </div>
 
-        {/* status line */}
-        <div
-          style={{
-            marginTop: 3,
-            fontSize: 9,
-            opacity: 0.75,
-            whiteSpace: "normal",
-            wordBreak: "break-word",
-          }}
-        >
-          {statusLabel}
-        </div>
-      </div>
-    );
-  })}
-</div>
+                    <div style={{ marginTop: 3, fontSize: 9, opacity: 0.75, whiteSpace: "normal", wordBreak: "break-word" }}>
+                      {statusLabel}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
             {/* Pending payments */}
             <div style={{ marginTop: 18, padding: 16, borderRadius: 14, border: "1px solid #333", background: "#111" }}>
@@ -481,26 +435,14 @@ const AdminRaffle: React.FC = () => {
                         <div style={{ fontWeight: 1000 }}>
                           #{p.number} • {p.name || "User"}
                         </div>
-                        <div style={{ fontSize: 12, opacity: 0.75 }}>
-                          Ref: {p.reference || `${raffleId}-${p.number}`}
-                        </div>
+                        <div style={{ fontSize: 12, opacity: 0.75 }}>Ref: {p.reference || `${raffleId}-${p.number}`}</div>
                       </div>
 
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <button
-                          className="pd-primary"
-                          type="button"
-                          disabled={busyId === p.id}
-                          onClick={() => approve(p.id)}
-                        >
+                        <button className="pd-primary" type="button" disabled={busyId === p.id} onClick={() => approve(p.id)}>
                           Approve
                         </button>
-                        <button
-                          className="pd-secondary"
-                          type="button"
-                          disabled={busyId === p.id}
-                          onClick={() => reject(p.id)}
-                        >
+                        <button className="pd-secondary" type="button" disabled={busyId === p.id} onClick={() => reject(p.id)}>
                           Reject
                         </button>
                       </div>
